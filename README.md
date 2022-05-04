@@ -23,6 +23,7 @@ for other operation sistem check [rust site](https://www.rust-lang.org/learn/get
 
 
 ## Running
+Au premier démarrage copier blocks.genesis.json -> blocks.json
 
 After clone this project, open a terminal in the project directory 
 ```
@@ -35,6 +36,10 @@ cargo run -- -o file.txt -s '34.136.23.218:8333'
 ```
 
 sometimes can return Error connection timeout
+
+BUGS :
+ ulimit -> Augmenter la taille des fichiers ouvert -> ulimit -n 65535
+
 
 ### Comparison
 We can see a print of the execution bitcoin crawler in go language
