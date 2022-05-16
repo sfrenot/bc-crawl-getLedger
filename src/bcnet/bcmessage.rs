@@ -165,7 +165,11 @@ pub fn build_request(message : &str) -> Vec<u8>{
         //
         // eprintln!("==> GET_HEADERS : {:02X?}", payload_bytes);
         // std::process::exit(1);
-    } else if message.len() > GET_DATA.len() && &message[..GET_DATA.len()] == *GET_DATA {
+    } else if message == *GET_DATA {
+        payload_bytes = bcblocks::get_getdata_message_payload();
+    }
+    /*
+    else if message.len() > GET_DATA.len() && &message[..GET_DATA.len()] == *GET_DATA {
 
         payload_bytes = bcblocks::get_getdata_message_payload(&message[GET_DATA.len()+1..]);
         message_name = &GET_DATA;
@@ -174,6 +178,7 @@ pub fn build_request(message : &str) -> Vec<u8>{
         // eprintln!("Build for getData : {:02x?}", payload_bytes);
         // std::process::exit(1);
     }
+    */
     // eprintln!("{} <-> {}", &message, &message_name);
 
     let mut header :Vec<u8> = vec![0; HEADER_SIZE];
@@ -181,10 +186,10 @@ pub fn build_request(message : &str) -> Vec<u8>{
     let mut request = vec![];
     request.extend(header);
     request.extend(payload_bytes);
-    // if message_name == GET_BLOCKS {
-    //     // eprintln!("==> BEFORE SEND GET_BLOCKS: {:02X?}", request);
+    if message == *GET_DATA {
+        eprintln!("==> BEFORE SEND GET_DATA: {:02X?}", request);
     //     // std::process::exit(1);
-    // }
+    }
 
     return request;
 }
@@ -276,7 +281,7 @@ pub enum ProcessHeadersMessageError {
     UnkownBlocks,
     NoNewBlocks
 }
-pub fn process_headers_message(known_block_guard: &mut MutexGuard<HashMap<String, bcblocks::BlockDesc>>,blocks_id_guard: &mut MutexGuard<Vec<(String, bool)>>, payload: &Vec<u8>) -> Result<(), ProcessHeadersMessageError> {
+pub fn process_headers_message(known_block_guard: &mut MutexGuard<HashMap<String, bcblocks::BlockDesc>>,blocks_id_guard: &mut MutexGuard<Vec<(String, bool, bool)>>, payload: &Vec<u8>) -> Result<(), ProcessHeadersMessageError> {
 
     let mut highest_index = 0;
 
@@ -301,6 +306,30 @@ pub fn process_headers_message(known_block_guard: &mut MutexGuard<HashMap<String
     match highest_index {
         0 => Err(ProcessHeadersMessageError::NoNewBlocks),
         _ => Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub enum ProcessBlockMessageError {
+    UnkownBlocks,
+    BlockAlreadyDownloaded
+}
+pub fn process_block_message(known_block_guard: &mut MutexGuard<HashMap<String, bcblocks::BlockDesc>>, blocks_id_guard: &mut MutexGuard<Vec<(String, bool, bool)>>, payload: &Vec<u8>) -> Result<(), ProcessBlockMessageError>{
+    let block_hash = sha256d::Hash::hash(&payload[..80]).to_string();
+    let search_block = known_block_guard.get(&block_hash);
+
+    match search_block {
+        Some(found_block) => {
+            let (block, next, downloaded) = blocks_id_guard.get(found_block.idx).unwrap();
+            if !downloaded {
+                blocks_id_guard[found_block.idx] = (block.to_string(), *next, true);
+                return Ok(())
+            }
+            Err(ProcessBlockMessageError::BlockAlreadyDownloaded)
+        }
+        _ => {
+            Err(ProcessBlockMessageError::UnkownBlocks)
+        }
     }
 }
 

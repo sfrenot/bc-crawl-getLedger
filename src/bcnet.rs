@@ -82,6 +82,9 @@ fn handle_incoming_message<'a>(connection:& TcpStream, sender: &Sender<String>, 
                             true  => &GET_HEADERS,
                             false => &CONN_CLOSE
                         },
+                    cmd if cmd == *BLOCK && payload.len() > 0 => {
+                        handle_incoming_cmd_msg_block(&payload)
+                    },
                     _ => {}
                 };
                 //
@@ -162,7 +165,7 @@ fn next_status(from: &String) -> &String {
         elem if *elem == *MSG_VERSION => {&MSG_VERSION_ACK},
         elem if *elem == *MSG_VERSION_ACK => {&MSG_GETADDR},
         elem if *elem == *MSG_GETADDR => {&GET_HEADERS},
-        elem if *elem == *GET_HEADERS => {&GET_HEADERS},
+        elem if *elem == *GET_HEADERS => {&GET_DATA},
         _ => {&CONN_CLOSE}
     }
 }
@@ -220,5 +223,19 @@ fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> boo
                 }
             }
         }
+    }
+}
+
+fn handle_incoming_cmd_msg_block(payload: &Vec<u8>) {
+    let mut blocks_id_guard = bcblocks::BLOCKS_ID.lock().unwrap();
+    let mut known_block_guard = bcblocks::KNOWN_BLOCK.lock().unwrap();
+
+    eprintln!("==> RECEIVED BLOCK: {:02X?}", payload);
+    std::process::exit(1);
+
+    match bcmessage::process_block_message(&mut known_block_guard, &mut blocks_id_guard, payload) {
+        Ok(()) => {
+        }
+        Err(err) => {}
     }
 }

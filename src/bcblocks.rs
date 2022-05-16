@@ -14,9 +14,10 @@ pub struct BlockDesc {
 lazy_static! {
     // static ref TEMPLATE_MESSAGE_PAYLOAD: Mutex<Vec<u8>> = Mutex::new(Vec::with_capacity(105));
     static ref TEMPLATE_GETBLOCK_PAYLOAD: Mutex<Vec<u8>> = Mutex::new(Vec::with_capacity(197));
-    pub static ref BLOCKS_ID: Mutex<Vec<(String, bool)>> = {
+    static ref TEMPLATE_GETDATA_PAYLOAD: Mutex<Vec<u8>> = Mutex::new(Vec::with_capacity(37));
+    pub static ref BLOCKS_ID: Mutex<Vec<(String, bool, bool)>> = {
         let mut m = Vec::with_capacity(5);
-        m.push((String::from("0000000000000000000000000000000000000000000000000000000000000000"), false));
+        m.push((String::from("0000000000000000000000000000000000000000000000000000000000000000"), false, false));
         Mutex::new(m)
     };
     pub static ref KNOWN_BLOCK: Mutex<HashMap<String, BlockDesc>> = Mutex::new(HashMap::new());
@@ -30,6 +31,7 @@ pub fn get_getheaders_message_payload() -> Vec<u8> {
     get_getblock_message_payload()
 }
 
+/*
 pub fn get_getdata_message_payload(search_block: &str) -> Vec<u8> {
     let mut block_message = Vec::with_capacity(37);
     block_message.extend([0x01]); //Number of Inventory vectors
@@ -39,8 +41,31 @@ pub fn get_getdata_message_payload(search_block: &str) -> Vec<u8> {
     block_message.extend(block);
     block_message
 }
+*/
 
-pub fn create_block_message_payload(blocks_id: &Vec<(String, bool)>) {
+pub fn get_getdata_message_payload() -> Vec<u8> {
+    TEMPLATE_GETDATA_PAYLOAD.lock().unwrap().clone()
+}
+
+pub fn create_getdata_message_payload(blocks_id: &Vec<(String, bool, bool)>) {
+    let mut block_message = TEMPLATE_GETDATA_PAYLOAD.lock().unwrap();
+    *block_message = Vec::with_capacity(37);
+    block_message.extend([0x01]); // Number of Inventory vectors
+    block_message.extend([0x02, 0x00, 0x00, 0x00]); // Type of inventory entry (2 = block)
+    let mut search_block:&str = "";
+    for i in 1..blocks_id.len() {
+        let (bloc, _, downloaded) = &blocks_id[i];
+        if !downloaded {
+            search_block = bloc;
+            break;
+        }
+    }
+    let mut block = Vec::from_hex(search_block).unwrap();
+    block.reverse();
+    block_message.extend(block);
+}
+
+pub fn create_block_message_payload(blocks_id: &Vec<(String, bool, bool)>) {
     let mut block_message = TEMPLATE_GETBLOCK_PAYLOAD.lock().unwrap();
     *block_message = Vec::with_capacity(block_message.len()+32);
     block_message.extend(VERSION.to_le_bytes());
@@ -48,7 +73,7 @@ pub fn create_block_message_payload(blocks_id: &Vec<(String, bool)>) {
     let size = blocks_id.len()-1;
     let mut nb = 0;
     for i in 0..blocks_id.len() {
-        let (bloc, next) = &blocks_id[size-i];
+        let (bloc, next, _) = &blocks_id[size-i];
         if !next {
             let mut val = Vec::from_hex(bloc).unwrap();
             val.reverse();
@@ -62,7 +87,7 @@ pub fn create_block_message_payload(blocks_id: &Vec<(String, bool)>) {
     // std::process::exit(1);
 }
 
-pub fn is_new(known_block: &mut MutexGuard<HashMap<String, BlockDesc>>,blocks_id: &mut MutexGuard<Vec<(String, bool)>>, block: String, previous: String ) -> Result<usize, ()> {
+pub fn is_new(known_block: &mut MutexGuard<HashMap<String, BlockDesc>>,blocks_id: &mut MutexGuard<Vec<(String, bool, bool)>>, block: String, previous: String ) -> Result<usize, ()> {
 
     let search_block =  known_block.get(&block);
     let search_previous = known_block.get(&previous);
@@ -71,9 +96,9 @@ pub fn is_new(known_block: &mut MutexGuard<HashMap<String, BlockDesc>>,blocks_id
         Some(previous_block) => {
             match search_block {
                 None => {
-                    let (val, _) = blocks_id.get(previous_block.idx).unwrap();
-                    blocks_id[previous_block.idx] =  (val.to_string(), true);                    // std::mem::replace(&mut blocks_id[previous_block.idx], (val.to_string(), true));
-                    blocks_id.insert((previous_block.idx+1) as usize, (block.clone(), false));
+                    let (val, _, downloaded) = blocks_id.get(previous_block.idx).unwrap();
+                    blocks_id[previous_block.idx] =  (val.to_string(), true, *downloaded);                    // std::mem::replace(&mut blocks_id[previous_block.idx], (val.to_string(), true));
+                    blocks_id.insert((previous_block.idx+1) as usize, (block.clone(), false, false));
 
                     let idx = previous_block.idx + 1;
                     known_block.insert(block.clone(), BlockDesc{idx, previous});
@@ -96,7 +121,7 @@ pub fn is_new(known_block: &mut MutexGuard<HashMap<String, BlockDesc>>,blocks_id
                     let val = BlockDesc{idx, previous: previous.clone()};
                     known_block.insert(block.clone(), val);
 
-                    blocks_id.insert(idx, (previous.clone(), true));
+                    blocks_id.insert(idx, (previous.clone(), true, false));
                     eprintln!("Previous non {}, Block oui {}", &previous, &block);
 
                     // eprintln!("{:?}", blocks_id);

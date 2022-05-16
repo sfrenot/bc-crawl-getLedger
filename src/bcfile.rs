@@ -17,13 +17,14 @@ lazy_static! {
 #[derive(Debug, Deserialize)]
 pub struct Block {
     pub elem: String,
-    pub next: bool
+    pub next: bool,
+    pub downloaded: bool
 }
 
 pub fn load_blocks() {
     eprintln!("Début lecture fichier blocks");
     let file = File::open("./blocks.json").unwrap();
-    let blocks: Vec<Block> = ::serde_json::from_reader(BufReader::new(file)).unwrap();
+    let blocks: Vec<Block> = serde_json::from_reader(BufReader::new(file)).unwrap();
 
     let mut known_block = bcblocks::KNOWN_BLOCK.lock().unwrap();
     let mut blocks_id = bcblocks::BLOCKS_ID.lock().unwrap();
@@ -32,7 +33,7 @@ pub fn load_blocks() {
     let mut previous: String = "".to_string();
     for item in blocks {
         // eprintln!("-> {}", item.elem);
-        blocks_id.push((item.elem.clone(), item.next));
+        blocks_id.push((item.elem.clone(), item.next, item.downloaded)); // TODO: check if the block content already has been dl
         known_block.insert(item.elem.clone(), bcblocks::BlockDesc{idx, previous});
         if item.next {
             previous = item.elem;
@@ -44,19 +45,19 @@ pub fn load_blocks() {
     eprintln!("Fin lecture fichier blocks");
 }
 
-pub fn store_blocks(blocks: &Vec<(String, bool)>) -> bool {
+pub fn store_blocks(blocks: &Vec<(String, bool, bool)>) -> bool {
     let mut file = LineWriter::new(File::create("./blocks-found.json").unwrap());
     let mut new_blocks = false;
     file.write_all(b"[\n").unwrap();
     for i in 1..blocks.len() {
-        let (block, next) = &blocks[i];
-        file.write_all(format!("\t {{\"elem\": \"{}\", \"next\": {}}}", block, next).as_ref()).unwrap();
+        let (block, next, downloaded) = &blocks[i];
+        file.write_all(format!("\t {{\"elem\": \"{}\", \"next\": {}, \"downloaded\": {}}}", block, next, downloaded).as_ref()).unwrap();
         if i < blocks.len()-1 {
          file.write_all(b",\n").unwrap();
         } else {
          file.write_all(b"\n").unwrap();
         }
-        if !new_blocks && !next {
+        if !new_blocks && !*next {
             new_blocks = true;
         }
     }
