@@ -2,8 +2,10 @@ use std::io::BufReader;
 use serde::Deserialize;
 use std::fs::{self, File};
 use std::io::{LineWriter, stdout, Write};
+use std::ptr::hash;
 use lazy_static::lazy_static;
 use std::sync::Mutex;
+use bitcoin_hashes::{Hash, sha256d};
 use crate::bcblocks;
 use chrono::{DateTime, Utc};
 
@@ -65,6 +67,14 @@ pub fn store_blocks(blocks: &Vec<(String, bool, bool)>) -> bool {
     drop(file);
     fs::rename("./blocks-found.json", "./blocks.json").unwrap();
     new_blocks
+}
+
+pub fn store_block(hash: String, transactions: String) {
+    let mut file = LineWriter::new(File::create("./blocks/new-block.json").unwrap());
+    file.write_all(format!("{{\"hash\": \"{}\", \"transactions\": \"{}\"}}", hash, transactions).as_ref()).unwrap();
+    drop(file);
+    let file_name: String = hash.chars().rev().take(5).collect();
+    fs::rename("./blocks/new-block.json", format!("./blocks/{}.json", file_name)).unwrap();
 }
 
 /// Addr storage

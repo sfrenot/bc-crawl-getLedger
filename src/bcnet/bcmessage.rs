@@ -186,10 +186,10 @@ pub fn build_request(message : &str) -> Vec<u8>{
     let mut request = vec![];
     request.extend(header);
     request.extend(payload_bytes);
-    if message == *GET_DATA {
-        eprintln!("==> BEFORE SEND GET_DATA: {:02X?}", request);
-    //     // std::process::exit(1);
-    }
+    //if message == *GET_DATA {
+    //  eprintln!("==> BEFORE SEND GET_DATA: {:02X?}", request);
+    //  std::process::exit(1);
+    //}
 
     return request;
 }
@@ -314,7 +314,7 @@ pub enum ProcessBlockMessageError {
     UnkownBlocks,
     BlockAlreadyDownloaded
 }
-pub fn process_block_message(known_block_guard: &mut MutexGuard<HashMap<String, bcblocks::BlockDesc>>, blocks_id_guard: &mut MutexGuard<Vec<(String, bool, bool)>>, payload: &Vec<u8>) -> Result<(), ProcessBlockMessageError>{
+pub fn process_block_message(known_block_guard: &mut MutexGuard<HashMap<String, bcblocks::BlockDesc>>, blocks_id_guard: &mut MutexGuard<Vec<(String, bool, bool)>>, payload: &Vec<u8>) -> Result<(String, String), ProcessBlockMessageError>{
     let block_hash = sha256d::Hash::hash(&payload[..80]).to_string();
     let search_block = known_block_guard.get(&block_hash);
 
@@ -323,7 +323,9 @@ pub fn process_block_message(known_block_guard: &mut MutexGuard<HashMap<String, 
             let (block, next, downloaded) = blocks_id_guard.get(found_block.idx).unwrap();
             if !downloaded {
                 blocks_id_guard[found_block.idx] = (block.to_string(), *next, true);
-                return Ok(())
+                let (_, offset) = get_compact_int(&payload[80..].to_vec());
+                let transactions = hex::encode(&payload[80+offset..]);
+                return Ok((block_hash, transactions))
             }
             Err(ProcessBlockMessageError::BlockAlreadyDownloaded)
         }
