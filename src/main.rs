@@ -12,6 +12,7 @@ use std::thread;
 use std::process;
 
 use std::time::{Duration, SystemTime};
+//use git2::Repository;
 
 const CHECK_TERMINATION_TIMEOUT:Duration = Duration::from_secs(5);
 const THREADS: u64 = 500;
@@ -19,6 +20,12 @@ const MESSAGE_CHANNEL_SIZE: usize = 100000;
 
 
 fn main() {
+    // let repo = Repository::open(".").expect("Impossible d'ouvrir le git");
+    // println!("{} state={:?}", repo.path().display(), repo.state());
+    // process::exit(1);
+
+
+
     bcfile::load_blocks();
     bcblocks::create_block_message_payload(&bcblocks::BLOCKS_ID.lock().unwrap());
 
