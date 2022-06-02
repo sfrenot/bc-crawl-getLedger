@@ -2,7 +2,6 @@ use std::io::BufReader;
 use serde::Deserialize;
 use std::fs::{self, File};
 use std::io::{LineWriter, stdout, Write};
-use std::ptr::hash;
 use lazy_static::lazy_static;
 use std::sync::Mutex;
 use bitcoin_hashes::{Hash, sha256d};
@@ -70,11 +69,16 @@ pub fn store_blocks(blocks: &Vec<(String, bool, bool)>) -> bool {
 }
 
 pub fn store_block(hash: String, transactions: String) {
-    let mut file = LineWriter::new(File::create("./blocks/new-block.json").unwrap());
+    let dir_path = "./blocks/".to_owned() + &hash[hash.len()-2..];
+    match fs::create_dir_all(&dir_path) {
+        Ok(_) => {}
+        Err(err) => {
+            eprintln!("Error writing block to disk: {}", err);
+            std::process::exit(1)
+        }
+    }
+    let mut file = LineWriter::new(File::create(format!("{}/{}.json", dir_path, hash)).unwrap());
     file.write_all(format!("{{\"hash\": \"{}\", \"transactions\": \"{}\"}}", hash, transactions).as_ref()).unwrap();
-    drop(file);
-    let file_name: String = hash.chars().rev().take(5).collect();
-    fs::rename("./blocks/new-block.json", format!("./blocks/{}.json", file_name)).unwrap();
 }
 
 /// Addr storage

@@ -232,13 +232,13 @@ fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> boo
 fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize) -> bool {
     let mut known_block_guard = bcblocks::KNOWN_BLOCK.lock().unwrap();
     let mut blocks_id_guard = bcblocks::BLOCKS_ID.lock().unwrap();
-    eprintln!("==> RECEIVED BLOCK");
 
     match bcmessage::process_block_message(&mut known_block_guard, &mut blocks_id_guard, payload) {
         Ok((hash, transactions)) => {
             bcfile::store_block(hash, transactions);
             bcblocks::create_getdata_message_payload(&blocks_id_guard);
             *lecture = 0;
+            eprintln!("new block stored");
             true
         },
         Err(e) => {
@@ -248,7 +248,6 @@ fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize) -> bool
                     false
                 },
                 bcmessage::ProcessBlockMessageError::BlockAlreadyDownloaded => {
-                    eprintln!("Error processing block message: Block Already downloaded");
                     true
                 }
             }
