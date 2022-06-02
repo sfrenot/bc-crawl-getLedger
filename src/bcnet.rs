@@ -14,7 +14,6 @@ use chan::Receiver;
 use bcmessage::{INV, MSG_VERSION, MSG_VERSION_ACK, MSG_GETADDR, CONN_CLOSE, MSG_ADDR, GET_HEADERS, HEADERS, GET_BLOCKS, BLOCK, GET_DATA};
 use crate::bcfile as bcfile;
 use crate::bcblocks as bcblocks;
-use crate::bcblocks::create_getdata_message_payload;
 use crate::bcpeers as bcpeers;
 
 const CONNECTION_TIMEOUT:Duration = Duration::from_secs(10);
@@ -84,7 +83,7 @@ fn handle_incoming_message<'a>(connection:& TcpStream, sender: &Sender<String>, 
                             false => &CONN_CLOSE
                         },
                     cmd if cmd == *BLOCK && payload.len() > 0
-                        => return match handle_incoming_cmd_msg_block(&payload) {
+                        => return match handle_incoming_cmd_msg_block(&payload, &mut lecture) {
                         true => &GET_DATA,
                         false => &CONN_CLOSE
                     },
@@ -230,28 +229,29 @@ fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> boo
     }
 }
 
-fn handle_incoming_cmd_msg_block(payload: &Vec<u8>) -> bool {
-    let mut blocks_id_guard = bcblocks::BLOCKS_ID.lock().unwrap();
+fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize) -> bool {
     let mut known_block_guard = bcblocks::KNOWN_BLOCK.lock().unwrap();
-
+    let mut blocks_id_guard = bcblocks::BLOCKS_ID.lock().unwrap();
     eprintln!("==> RECEIVED BLOCK");
 
     match bcmessage::process_block_message(&mut known_block_guard, &mut blocks_id_guard, payload) {
         Ok((hash, transactions)) => {
             bcfile::store_block(hash, transactions);
-            create_getdata_message_payload(&blocks_id_guard);
+            bcblocks::create_getdata_message_payload(&blocks_id_guard);
+            *lecture = 0;
             true
         },
         Err(e) => {
             match e {
                 bcmessage::ProcessBlockMessageError::UnkownBlocks => {
                     eprintln!("Error processing block message: Unknown Block");
+                    false
                 },
                 bcmessage::ProcessBlockMessageError::BlockAlreadyDownloaded => {
                     eprintln!("Error processing block message: Block Already downloaded");
+                    true
                 }
             }
-            false
         }
     }
 }
