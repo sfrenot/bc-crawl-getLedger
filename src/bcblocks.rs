@@ -128,7 +128,7 @@ pub fn create_getdata_message_payload(blocks_id: &Vec<(String, bool, bool)>) {
     let mut block_message = TEMPLATE_GETDATA_PAYLOAD.lock().unwrap();
     *block_message = Vec::with_capacity(37);
     block_message.extend([0x01]); // Number of Inventory vectors
-    block_message.extend([0x02, 0x00, 0x00, 0x00]); // Type of inventory entry (2 = block)
+    block_message.extend([0x02, 0x00, 0x00, 0x40]); // Type of inventory entry (2 = block) (40 for witness)
     let mut search_block:&str = "";
     for i in 1..blocks_id.len() {
         let (bloc, _, downloaded) = &blocks_id[i];
@@ -348,6 +348,7 @@ fn parse_transaction(payload: &Vec<u8>) -> Result<(Transaction, usize), ParsingE
     txn.lock_time = u32::from_le_bytes(temp_bytes.try_into().unwrap());
     offset += 4;
 
+    // hash
     if txn.segwit_flag {
         raw_txn.extend_from_slice(temp_bytes);
         txn.hash = hex::encode(sha256d::Hash::hash(&raw_txn));

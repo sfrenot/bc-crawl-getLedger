@@ -68,7 +68,7 @@ pub fn store_blocks(blocks: &Vec<(String, bool, bool)>) -> bool {
     new_blocks
 }
 
-pub fn store_block(block: Block) {
+pub fn store_block(block: &Block) {
     let rev_hash = reverse_hash(&block.hash);
     let dir_path = "./blocks/".to_owned() + &rev_hash[rev_hash.len()-2..];
     match fs::create_dir_all(&dir_path) {
