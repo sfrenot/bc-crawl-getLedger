@@ -46,7 +46,7 @@ pub fn load_blocks() {
     eprintln!("Fin lecture fichier blocks");
 }
 
-pub fn store_blocks(blocks: &Vec<(String, bool, bool)>) -> bool {
+pub fn store_headers(blocks: &Vec<(String, bool, bool)>) -> bool {
     let mut file = LineWriter::new(File::create("./blocks-found.json").unwrap());
     let mut new_blocks = false;
     file.write_all(b"[\n").unwrap();
