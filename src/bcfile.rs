@@ -4,9 +4,10 @@ use std::fs::{self, File};
 use std::io::{LineWriter, stdout, Write};
 use lazy_static::lazy_static;
 use std::sync::Mutex;
-use bitcoin_hashes::{Hash, sha256d};
 use crate::bcblocks;
 use chrono::{DateTime, Utc};
+use crate::bcblocks::Block;
+use crate::bcnet::bcmessage::reverse_hash;
 
 lazy_static! {
     pub static ref LOGGER: Mutex<LineWriter<Box<dyn Write + Send>>> = Mutex::new(LineWriter::new(Box::new(stdout())));
@@ -14,9 +15,9 @@ lazy_static! {
     pub static ref SORTIE:LineWriter<File> = LineWriter::new(File::create("./blocks.raw").unwrap());
 }
 
-/// Block storage
+/// Header storage
 #[derive(Debug, Deserialize)]
-pub struct Block {
+pub struct Header {
     pub elem: String,
     pub next: bool,
     pub downloaded: bool
@@ -25,7 +26,7 @@ pub struct Block {
 pub fn load_blocks() {
     eprintln!("Début lecture fichier blocks");
     let file = File::open("./blocks.json").unwrap();
-    let blocks: Vec<Block> = serde_json::from_reader(BufReader::new(file)).unwrap();
+    let blocks: Vec<Header> = serde_json::from_reader(BufReader::new(file)).unwrap();
 
     let mut known_block = bcblocks::KNOWN_BLOCK.lock().unwrap();
     let mut blocks_id = bcblocks::BLOCKS_ID.lock().unwrap();
@@ -68,8 +69,9 @@ pub fn store_blocks(blocks: &Vec<(String, bool, bool)>) -> bool {
     new_blocks
 }
 
-pub fn store_block(hash: String, transactions: String) {
-    let dir_path = "./blocks/".to_owned() + &hash[hash.len()-2..];
+pub fn store_block(block: Block) {
+    let rev_hash = reverse_hash(&block.hash);
+    let dir_path = "./blocks/".to_owned() + &rev_hash[rev_hash.len()-2..];
     match fs::create_dir_all(&dir_path) {
         Ok(_) => {}
         Err(err) => {
@@ -77,8 +79,8 @@ pub fn store_block(hash: String, transactions: String) {
             std::process::exit(1)
         }
     }
-    let mut file = LineWriter::new(File::create(format!("{}/{}.json", dir_path, hash)).unwrap());
-    file.write_all(format!("{{\"hash\": \"{}\", \"transactions\": \"{}\"}}", hash, transactions).as_ref()).unwrap();
+    let mut file = LineWriter::new(File::create(format!("{}/{}.json", dir_path, rev_hash)).unwrap());
+    file.write(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
 }
 
 /// Addr storage

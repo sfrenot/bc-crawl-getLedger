@@ -16,7 +16,13 @@ pub struct BlockDesc {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Block {
-    pub header: String,
+    pub hash: String,
+    pub version: i32,
+    pub prev_hash: String,
+    pub merkle_root: String,
+    pub timestamp: u32,
+    pub bits: u32,
+    pub nonce: u32,
     pub txn_count: u64,
     pub txns: Vec<Transaction>
 }
@@ -209,8 +215,37 @@ pub fn parse_block(payload: &Vec<u8>) -> Result<Block, ParsingError> {
 
     // header hash
     temp_bytes = payload.get(..80).ok_or(ParsingError)?;
-    block.header = hex::encode(sha256d::Hash::hash(temp_bytes).to_vec());
-    offset += 80;
+    block.hash = hex::encode(sha256d::Hash::hash(temp_bytes).to_vec());
+
+    // version
+    temp_bytes = &payload[..4];
+    block.version = i32::from_le_bytes(temp_bytes.try_into().unwrap());
+    offset += 4;
+
+    // previous block hash
+    temp_bytes = &payload[offset..offset+32];
+    block.prev_hash = hex::encode(temp_bytes);
+    offset += 32;
+
+    // merkle root hash
+    temp_bytes = &payload[offset..offset+32];
+    block.merkle_root = hex::encode(temp_bytes);
+    offset += 32;
+
+    // timestamp
+    temp_bytes = &payload[offset..offset+4];
+    block.timestamp = u32::from_le_bytes(temp_bytes.try_into().unwrap());
+    offset += 4;
+
+    // bits
+    temp_bytes = &payload[offset..offset+4];
+    block.bits = u32::from_le_bytes(temp_bytes.try_into().unwrap());
+    offset += 4;
+
+    // nonce
+    temp_bytes = &payload[offset..offset+4];
+    block.nonce = u32::from_le_bytes(temp_bytes.try_into().unwrap());
+    offset += 4;
 
     // transaction count
     temp_bytes = payload.get(offset..).ok_or(ParsingError)?;

@@ -11,10 +11,9 @@ use std::net::{SocketAddr, TcpStream};
 use chan::Receiver;
 
 // use crate::bcmessage::{ReadResult, INV, MSG_VERSION, MSG_VERSION_ACK, MSG_GETADDR, CONN_CLOSE, MSG_ADDR, HEADERS, GET_BLOCKS, BLOCK, GET_DATA};
-use bcmessage::{INV, MSG_VERSION, MSG_VERSION_ACK, MSG_GETADDR, CONN_CLOSE, MSG_ADDR, GET_HEADERS, HEADERS, GET_BLOCKS, BLOCK, GET_DATA};
+use bcmessage::{MSG_VERSION, MSG_VERSION_ACK, MSG_GETADDR, CONN_CLOSE, MSG_ADDR, GET_HEADERS, HEADERS, BLOCK, GET_DATA};
 use crate::bcfile as bcfile;
 use crate::bcblocks as bcblocks;
-use crate::bcblocks::parse_block;
 use crate::bcpeers as bcpeers;
 
 const CONNECTION_TIMEOUT:Duration = Duration::from_secs(10);
@@ -235,8 +234,8 @@ fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize) -> bool
     let mut blocks_id_guard = bcblocks::BLOCKS_ID.lock().unwrap();
 
     match bcmessage::process_block_message(&mut known_block_guard, &mut blocks_id_guard, payload) {
-        Ok((hash, transactions)) => {
-            bcfile::store_block(hash, transactions);
+        Ok(block) => {
+            bcfile::store_block(block);
             bcblocks::create_getdata_message_payload(&blocks_id_guard);
             *lecture = 0;
             eprintln!("new block stored");
@@ -247,7 +246,11 @@ fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize) -> bool
                 bcmessage::ProcessBlockMessageError::UnkownBlock => {
                     eprintln!("Error processing block message: Unknown Block");
                     false
-                }
+                },
+                bcmessage::ProcessBlockMessageError::Parsing(..) => {
+                    eprintln!("Error processing block message: Parsing Error");
+                    false
+                },
                 bcmessage::ProcessBlockMessageError::BlockAlreadyDownloaded => {
                     true
                 }

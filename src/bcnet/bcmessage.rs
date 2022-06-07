@@ -12,6 +12,8 @@ use std::collections::HashMap;
 use hex::{FromHex};
 use crate::bcblocks;
 use bitcoin_hashes::{sha256d, Hash};
+use crate::bcblocks::{Block, parse_block, ParsingError};
+use crate::bcnet::bcmessage::ProcessBlockMessageError::Parsing;
 
 pub const VERSION:u32 = 70015;
 const PORT:u16 = 8333;
@@ -311,20 +313,27 @@ pub fn process_headers_message(known_block_guard: &mut MutexGuard<HashMap<String
 #[derive(Debug)]
 pub enum ProcessBlockMessageError {
     UnkownBlock,
-    BlockAlreadyDownloaded
+    BlockAlreadyDownloaded,
+    Parsing(ParsingError)
 }
-pub fn process_block_message(known_block_guard: &mut MutexGuard<HashMap<String, bcblocks::BlockDesc>>, blocks_id_guard: &mut MutexGuard<Vec<(String, bool, bool)>>, payload: &Vec<u8>) -> Result<(String, String), ProcessBlockMessageError>{
-    let block_hash = sha256d::Hash::hash(&payload[..80]).to_string();
-    let search_block = known_block_guard.get(&block_hash);
+
+impl From<ParsingError> for ProcessBlockMessageError {
+    fn from(_: ParsingError) -> ProcessBlockMessageError {
+        Parsing(ParsingError)
+    }
+}
+
+pub fn process_block_message(known_block_guard: &mut MutexGuard<HashMap<String, bcblocks::BlockDesc>>, blocks_id_guard: &mut MutexGuard<Vec<(String, bool, bool)>>, payload: &Vec<u8>) -> Result<Block, ProcessBlockMessageError>{
+    let parsed = parse_block(payload)?;
+    let rev_hash = reverse_hash(&parsed.hash);
+    let search_block = known_block_guard.get(&rev_hash);
 
     match search_block {
         Some(found_block) => {
             let (block, next, downloaded) = blocks_id_guard.get(found_block.idx).unwrap();
             if !downloaded {
                 blocks_id_guard[found_block.idx] = (block.to_string(), *next, true);
-                let (_, offset) = get_compact_int(&payload[80..].to_vec());
-                let transactions = hex::encode(&payload[80+offset..]);
-                return Ok((block_hash, transactions))
+                return Ok(parsed)
             }
             Err(ProcessBlockMessageError::BlockAlreadyDownloaded)
         }
@@ -380,4 +389,10 @@ fn get_start_byte(variable_length_int: & usize) -> usize {
         return  UNIT_32_END
     }
     return UNIT_64_END
+}
+
+pub fn reverse_hash(hash: &str) -> String {
+    let mut bytes = hex::decode(hash).unwrap();
+    bytes.reverse();
+    hex::encode(bytes)
 }

@@ -24,7 +24,7 @@ pub enum Status {
 #[derive(Debug)]
 struct PeerStatus  {
     pub status: Status,
-    pub retries: i32,
+    pub _retries: i32,
 }
 
 fn is_waiting(a_peer: String) -> bool {
@@ -32,7 +32,7 @@ fn is_waiting(a_peer: String) -> bool {
     // println!("Before {:?}", address_visited);
     let mut is_waiting = false;
     if !address_visited.contains_key(&a_peer) {
-        address_visited.insert(a_peer, PeerStatus{status:Status::Connecting, retries:0});
+        address_visited.insert(a_peer, PeerStatus{status:Status::Connecting, _retries:0});
         is_waiting = true
     }
     // } else {
@@ -50,12 +50,12 @@ fn is_waiting(a_peer: String) -> bool {
 
 pub fn fail(a_peer :String){
     let mut address_status = ADRESSES_VISITED.lock().unwrap();
-    address_status.insert(a_peer, PeerStatus{status:Status::Failed, retries:0});
+    address_status.insert(a_peer, PeerStatus{status:Status::Failed, _retries:0});
 }
 
 pub fn done(a_peer :String) {
     let mut address_status = ADRESSES_VISITED.lock().unwrap();
-    address_status.insert(a_peer, PeerStatus{status:Status::Done, retries:0});
+    address_status.insert(a_peer, PeerStatus{status:Status::Done, _retries:0});
 }
 
 pub fn get_peers_status() {
@@ -88,7 +88,7 @@ pub fn get_peers_status() {
 
 pub fn register_peer_connection(a_peer: &String) {
     let mut address_status = ADRESSES_VISITED.lock().unwrap();
-    address_status.insert(a_peer.to_string(), PeerStatus{status:Status::Connected, retries:0});
+    address_status.insert(a_peer.to_string(), PeerStatus{status:Status::Connected, _retries:0});
 }
 
 pub fn check_addr_messages(new_addresses: Vec<String>, address_channel: &Sender<String>) -> usize {
