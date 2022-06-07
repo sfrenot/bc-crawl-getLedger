@@ -20,8 +20,8 @@ const MESSAGE_CHANNEL_SIZE: usize = 100000;
 
 fn main() {
     bcfile::load_blocks();
-    bcblocks::create_block_message_payload(&bcblocks::BLOCKS_ID.lock().unwrap());
-    bcblocks::create_getdata_message_payload(&bcblocks::BLOCKS_ID.lock().unwrap());
+    bcblocks::create_block_message_payload(&bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id);
+    bcblocks::create_getdata_message_payload(&bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id);
 
     // eprintln!("{}", hex::encode(bcblocks::get_getblock_message_payload()));
     // eprintln!("{}", hex::encode(bcblocks::get_getheaders_message_payload()));

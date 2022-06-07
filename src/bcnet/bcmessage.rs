@@ -7,12 +7,11 @@ use sha2::{Sha256, Digest};
 use std::net::{TcpStream, IpAddr};
 use std::io::{Read, Error, ErrorKind};
 use std::convert::TryInto;
-use std::collections::HashMap;
 
 use hex::{FromHex};
 use crate::bcblocks;
 use bitcoin_hashes::{sha256d, Hash};
-use crate::bcblocks::{Block, parse_block, ParsingError};
+use crate::bcblocks::{Block, BlocksMutex, parse_block, ParsingError};
 use crate::bcnet::bcmessage::ProcessBlockMessageError::Parsing;
 
 pub const VERSION:u32 = 70015;
@@ -282,7 +281,7 @@ pub enum ProcessHeadersMessageError {
     UnkownBlocks,
     NoNewBlocks
 }
-pub fn process_headers_message(known_block_guard: &mut MutexGuard<HashMap<String, bcblocks::BlockDesc>>,blocks_id_guard: &mut MutexGuard<Vec<(String, bool, bool)>>, payload: &Vec<u8>) -> Result<(), ProcessHeadersMessageError> {
+pub fn process_headers_message(blocks_mutex_guard: &mut MutexGuard<BlocksMutex>, payload: &Vec<u8>) -> Result<(), ProcessHeadersMessageError> {
 
     let mut highest_index = 0;
 
@@ -294,7 +293,7 @@ pub fn process_headers_message(known_block_guard: &mut MutexGuard<HashMap<String
         previous_block.reverse();
         let current_block = sha256d::Hash::hash(&payload[offset..offset+header_length]);
         // eprintln!("Gen -> {} --> {}", hex::encode(previous_block), current_block.to_string());
-        match bcblocks::is_new(known_block_guard, blocks_id_guard, current_block.to_string(), hex::encode(previous_block)) {
+        match bcblocks::is_new(blocks_mutex_guard, current_block.to_string(), hex::encode(previous_block)) {
             Ok(idx) if idx > highest_index => {
                 highest_index = idx;
             },
@@ -323,16 +322,16 @@ impl From<ParsingError> for ProcessBlockMessageError {
     }
 }
 
-pub fn process_block_message(known_block_guard: &mut MutexGuard<HashMap<String, bcblocks::BlockDesc>>, blocks_id_guard: &mut MutexGuard<Vec<(String, bool, bool)>>, payload: &Vec<u8>) -> Result<Block, ProcessBlockMessageError>{
+pub fn process_block_message(blocks_mutex_guard: &mut MutexGuard<BlocksMutex>, payload: &Vec<u8>) -> Result<Block, ProcessBlockMessageError>{
     let parsed = parse_block(payload)?;
     let rev_hash = reverse_hash(&parsed.hash);
-    let search_block = known_block_guard.get(&rev_hash);
+    let search_block = blocks_mutex_guard.known_blocks.get(&rev_hash).cloned();
 
     match search_block {
         Some(found_block) => {
-            let (block, next, downloaded) = blocks_id_guard.get(found_block.idx).unwrap();
+            let (block, next, downloaded) = blocks_mutex_guard.blocks_id.get(found_block.idx).unwrap();
             if !downloaded {
-                blocks_id_guard[found_block.idx] = (block.to_string(), *next, true);
+                blocks_mutex_guard.blocks_id[found_block.idx] = (block.to_string(), *next, true);
                 return Ok(parsed)
             }
             Err(ProcessBlockMessageError::BlockAlreadyDownloaded)

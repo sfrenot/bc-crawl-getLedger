@@ -28,15 +28,14 @@ pub fn load_blocks() {
     let file = File::open("./blocks.json").unwrap();
     let blocks: Vec<Header> = serde_json::from_reader(BufReader::new(file)).unwrap();
 
-    let mut known_block = bcblocks::KNOWN_BLOCK.lock().unwrap();
-    let mut blocks_id = bcblocks::BLOCKS_ID.lock().unwrap();
+    let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
 
     let mut idx:usize = 1;
     let mut previous: String = "".to_string();
     for item in blocks {
         // eprintln!("-> {}", item.elem);
-        blocks_id.push((item.elem.clone(), item.next, item.downloaded)); // TODO: check if the block content already has been dl
-        known_block.insert(item.elem.clone(), bcblocks::BlockDesc{idx, previous});
+        blocks_mutex_guard.blocks_id.push((item.elem.clone(), item.next, item.downloaded)); // TODO: check if the block content already has been dl
+        blocks_mutex_guard.known_blocks.insert(item.elem.clone(), bcblocks::BlockDesc{idx, previous});
         if item.next {
             previous = item.elem;
         } else {

@@ -8,7 +8,7 @@ use std::convert::TryInto;
 use bitcoin_hashes::{sha256d, Hash};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockDesc {
     pub idx: usize,
     pub previous: String
@@ -77,16 +77,27 @@ pub struct WitnessItem {
 //     pub sequence: u32
 // }
 
+pub struct BlocksMutex {
+    pub blocks_id: Vec<(String, bool, bool)>,
+    pub known_blocks: HashMap<String, BlockDesc>
+}
+
 lazy_static! {
     // static ref TEMPLATE_MESSAGE_PAYLOAD: Mutex<Vec<u8>> = Mutex::new(Vec::with_capacity(105));
     static ref TEMPLATE_GETBLOCK_PAYLOAD: Mutex<Vec<u8>> = Mutex::new(Vec::with_capacity(197));
     static ref TEMPLATE_GETDATA_PAYLOAD: Mutex<Vec<u8>> = Mutex::new(Vec::with_capacity(37));
-    pub static ref BLOCKS_ID: Mutex<Vec<(String, bool, bool)>> = {
+
+    pub static ref BLOCKS_MUTEX: Mutex<BlocksMutex> = {
         let mut m = Vec::with_capacity(5);
         m.push((String::from("0000000000000000000000000000000000000000000000000000000000000000"), false, false));
-        Mutex::new(m)
+
+        let s = BlocksMutex {
+            blocks_id: m,
+            known_blocks: HashMap::new()
+        };
+
+        Mutex::new(s)
     };
-    pub static ref KNOWN_BLOCK: Mutex<HashMap<String, BlockDesc>> = Mutex::new(HashMap::new());
 }
 
 pub fn get_getblock_message_payload() -> Vec<u8> {
@@ -153,21 +164,21 @@ pub fn create_block_message_payload(blocks_id: &Vec<(String, bool, bool)>) {
     // std::process::exit(1);
 }
 
-pub fn is_new(known_block: &mut MutexGuard<HashMap<String, BlockDesc>>,blocks_id: &mut MutexGuard<Vec<(String, bool, bool)>>, block: String, previous: String ) -> Result<usize, ()> {
+pub fn is_new(blocks_mutex_guard: &mut MutexGuard<BlocksMutex>, block: String, previous: String ) -> Result<usize, ()> {
 
-    let search_block =  known_block.get(&block);
-    let search_previous = known_block.get(&previous);
+    let search_block =  blocks_mutex_guard.known_blocks.get(&block).cloned();
+    let search_previous = blocks_mutex_guard.known_blocks.get(&previous).cloned();
 
     match search_previous {
         Some(previous_block) => {
             match search_block {
                 None => {
-                    let (val, _, downloaded) = blocks_id.get(previous_block.idx).unwrap();
-                    blocks_id[previous_block.idx] =  (val.to_string(), true, *downloaded);                    // std::mem::replace(&mut blocks_id[previous_block.idx], (val.to_string(), true));
-                    blocks_id.insert((previous_block.idx+1) as usize, (block.clone(), false, false));
+                    let (val, _, downloaded) = blocks_mutex_guard.blocks_id.get(previous_block.idx).unwrap();
+                    blocks_mutex_guard.blocks_id[previous_block.idx] =  (val.to_string(), true, *downloaded);
+                    blocks_mutex_guard.blocks_id.insert((previous_block.idx+1) as usize, (block.clone(), false, false));
 
                     let idx = previous_block.idx + 1;
-                    known_block.insert(block.clone(), BlockDesc{idx, previous});
+                    blocks_mutex_guard.known_blocks.insert(block.clone(), BlockDesc{idx, previous});
                     // eprintln!("Trouvé previous, Pas trouvé block");
                     // eprintln!("{:?}", blocks_id);
                     // eprintln!("{:?}", known_block);
@@ -185,9 +196,9 @@ pub fn is_new(known_block: &mut MutexGuard<HashMap<String, BlockDesc>>,blocks_id
                     // eprintln!("Previous {} non trouvé, Block trouvé {}", &previous, &block);
                     let idx = found_block.idx;
                     let val = BlockDesc{idx, previous: previous.clone()};
-                    known_block.insert(block.clone(), val);
+                    blocks_mutex_guard.known_blocks.insert(block.clone(), val);
 
-                    blocks_id.insert(idx, (previous.clone(), true, false));
+                    blocks_mutex_guard.blocks_id.insert(idx, (previous.clone(), true, false));
                     eprintln!("Previous non {}, Block oui {}", &previous, &block);
 
                     // eprintln!("{:?}", blocks_id);

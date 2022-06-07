@@ -195,15 +195,14 @@ fn handle_incoming_cmd_msg_addr(payload: &Vec<u8>, sender: &Sender<String>) -> b
 }
 
 fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> bool {
-    let mut known_block_guard = bcblocks::KNOWN_BLOCK.lock().unwrap();
-    let mut blocks_id_guard = bcblocks::BLOCKS_ID.lock().unwrap();
+    let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
 
     // eprintln!("Status : {} -> {}", idx, block);
-    match bcmessage::process_headers_message(&mut known_block_guard, &mut blocks_id_guard, payload) {
+    match bcmessage::process_headers_message(&mut blocks_mutex_guard, payload) {
         Ok(()) => {
-            match bcfile::store_blocks(&blocks_id_guard) {
+            match bcfile::store_blocks(&blocks_mutex_guard.blocks_id) {
                true => {
-                   bcblocks::create_block_message_payload(&blocks_id_guard);
+                   bcblocks::create_block_message_payload(&blocks_mutex_guard.blocks_id);
                    eprintln!("new payload -> {:02x?}", hex::encode(&bcblocks::get_getheaders_message_payload()));
                    *lecture = 0;
                    true
@@ -230,13 +229,12 @@ fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> boo
 }
 
 fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize) -> bool {
-    let mut known_block_guard = bcblocks::KNOWN_BLOCK.lock().unwrap();
-    let mut blocks_id_guard = bcblocks::BLOCKS_ID.lock().unwrap();
+    let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
 
-    match bcmessage::process_block_message(&mut known_block_guard, &mut blocks_id_guard, payload) {
+    match bcmessage::process_block_message(&mut blocks_mutex_guard, payload) {
         Ok(block) => {
             bcfile::store_block(block);
-            bcblocks::create_getdata_message_payload(&blocks_id_guard);
+            bcblocks::create_getdata_message_payload(&blocks_mutex_guard.blocks_id);
             *lecture = 0;
             eprintln!("new block stored");
             true
