@@ -14,6 +14,7 @@ use chan::Receiver;
 use bcmessage::{INV, MSG_VERSION, MSG_VERSION_ACK, MSG_GETADDR, CONN_CLOSE, MSG_ADDR, GET_HEADERS, HEADERS, GET_BLOCKS, BLOCK, GET_DATA};
 use crate::bcfile as bcfile;
 use crate::bcblocks as bcblocks;
+use crate::bcblocks::parse_block;
 use crate::bcpeers as bcpeers;
 
 const CONNECTION_TIMEOUT:Duration = Duration::from_secs(10);
@@ -63,7 +64,7 @@ fn handle_incoming_message<'a>(connection:& TcpStream, sender: &Sender<String>, 
     let mut lecture:usize = 0; // Garde pour éviter connection infinie inutile
     loop {
         // println!("Lecture de {}", target_address);
-        match bcmessage::read_message(&connection) {
+        match bcmessage::read_message(&connection) { // TODO : check if is blocking
             Err(_error) => return &CONN_CLOSE,
             Ok((command, payload)) => {
                 lecture+=1;
@@ -243,10 +244,10 @@ fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize) -> bool
         },
         Err(e) => {
             match e {
-                bcmessage::ProcessBlockMessageError::UnkownBlocks => {
+                bcmessage::ProcessBlockMessageError::UnkownBlock => {
                     eprintln!("Error processing block message: Unknown Block");
                     false
-                },
+                }
                 bcmessage::ProcessBlockMessageError::BlockAlreadyDownloaded => {
                     true
                 }

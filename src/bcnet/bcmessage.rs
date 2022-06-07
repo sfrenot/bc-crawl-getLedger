@@ -9,7 +9,7 @@ use std::io::{Read, Error, ErrorKind};
 use std::convert::TryInto;
 use std::collections::HashMap;
 
-use hex::FromHex;
+use hex::{FromHex};
 use crate::bcblocks;
 use bitcoin_hashes::{sha256d, Hash};
 
@@ -87,7 +87,6 @@ const START_CHECKSUM:usize = 20;
 const END_CHECKSUM:usize = 24;
 
 fn create_init_message_payload() -> Vec<u8> {
-
     let services:u64 = NODE_NETWORK | NODE_BLOOM | NODE_WITNESS | NODE_NETWORK_LIMITED;
     let date_buffer:u64 = 0;
     let address_buffer:u64 = 0;
@@ -154,7 +153,7 @@ pub fn read_message(mut connection: &TcpStream) -> Result<(String, Vec<u8>), Err
 
 pub fn build_request(message : &str) -> Vec<u8>{
     let mut payload_bytes: Vec<u8> = Vec::new();
-    let mut message_name = message;
+    let message_name = message;
     if message == MSG_VERSION.to_string() {
         payload_bytes = get_payload_with_current_date();
         // eprintln!("->MSG_VERSION : {:02X?}", payload_bytes);
@@ -311,7 +310,7 @@ pub fn process_headers_message(known_block_guard: &mut MutexGuard<HashMap<String
 
 #[derive(Debug)]
 pub enum ProcessBlockMessageError {
-    UnkownBlocks,
+    UnkownBlock,
     BlockAlreadyDownloaded
 }
 pub fn process_block_message(known_block_guard: &mut MutexGuard<HashMap<String, bcblocks::BlockDesc>>, blocks_id_guard: &mut MutexGuard<Vec<(String, bool, bool)>>, payload: &Vec<u8>) -> Result<(String, String), ProcessBlockMessageError>{
@@ -330,13 +329,13 @@ pub fn process_block_message(known_block_guard: &mut MutexGuard<HashMap<String, 
             Err(ProcessBlockMessageError::BlockAlreadyDownloaded)
         }
         _ => {
-            Err(ProcessBlockMessageError::UnkownBlocks)
+            Err(ProcessBlockMessageError::UnkownBlock)
         }
     }
 }
 
 //// COMMON SERVICES
-fn get_compact_int(payload: &Vec<u8>) -> (u64, usize) {
+pub fn get_compact_int(payload: &Vec<u8>) -> (u64, usize) {
     let storage_length: u8 = payload[STORAGE_BYTE];
     // TODO: Try with match construct
     if storage_length == UNIT_16 {
