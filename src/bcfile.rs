@@ -1,4 +1,4 @@
-use std::io::BufReader;
+use std::io::{BufRead, BufReader};
 use serde::Deserialize;
 use std::fs::{self, File};
 use std::io::{LineWriter, stdout, Write};
@@ -13,6 +13,7 @@ lazy_static! {
     pub static ref LOGGER: Mutex<LineWriter<Box<dyn Write + Send>>> = Mutex::new(LineWriter::new(Box::new(stdout())));
     // pub static ref BLOCKS: Mutex<LineWriter<Box<dyn Write + Send>>> = Mutex::new(LineWriter::new(Box::new(File::create("./blocks.raw").unwrap())));
     pub static ref SORTIE:LineWriter<File> = LineWriter::new(File::create("./blocks.raw").unwrap());
+    pub static ref TO_UPDATE_COUNT: Mutex<usize> = Mutex::new(0);
 }
 
 /// Header storage
@@ -34,7 +35,7 @@ pub fn load_blocks() {
     let mut previous: String = "".to_string();
     for item in blocks {
         // eprintln!("-> {}", item.elem);
-        blocks_mutex_guard.blocks_id.push((item.elem.clone(), item.next, item.downloaded)); // TODO: check if the block content already has been dl
+        blocks_mutex_guard.blocks_id.push((item.elem.clone(), item.next, item.downloaded));
         blocks_mutex_guard.known_blocks.insert(item.elem.clone(), bcblocks::BlockDesc{idx, previous});
         if item.next {
             previous = item.elem;
@@ -42,6 +43,23 @@ pub fn load_blocks() {
             previous = "".to_string();
         }
         idx+=1;
+    }
+
+    if let Ok(f) = File::open("./to_update.lock") {
+        let reader = BufReader::new(f);
+        for line in reader.lines() {
+            match blocks_mutex_guard.known_blocks.get(&line.unwrap()).cloned(){
+                Some(block) => {
+                    let (hash, next, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
+                    blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true);
+                }
+                None => {
+                    eprintln!("Unknown hash in lock file");
+                    std::process::exit(1);
+                }
+            }
+        }
+        store_headers(&blocks_mutex_guard.blocks_id);
     }
     eprintln!("Fin lecture fichier blocks");
 }
@@ -65,6 +83,8 @@ pub fn store_headers(blocks: &Vec<(String, bool, bool)>) -> bool {
     file.write_all(b"]").unwrap();
     drop(file);
     fs::rename("./blocks-found.json", "./blocks.json").unwrap();
+    let _ = fs::remove_file("./to_update.lock");
+    *TO_UPDATE_COUNT.lock().unwrap() = 0;
     new_blocks
 }
 
@@ -78,8 +98,13 @@ pub fn store_block(block: &Block) {
             std::process::exit(1)
         }
     }
-    let mut file = LineWriter::new(File::create(format!("{}/{}.json", dir_path, rev_hash)).unwrap());
-    file.write(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
+    let mut file = File::create(format!("{}/{}.json", dir_path, rev_hash)).unwrap();
+    file.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
+
+    let mut f = File::options().append(true).create(true).open("./to_update.lock").unwrap();
+    f.write_all(rev_hash.as_bytes()).unwrap();
+    f.write_all(b"\n").unwrap();
+    *TO_UPDATE_COUNT.lock().unwrap() += 1;
 }
 
 /// Addr storage

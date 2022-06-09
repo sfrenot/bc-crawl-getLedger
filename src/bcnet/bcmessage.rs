@@ -329,9 +329,9 @@ pub fn process_block_message(blocks_mutex_guard: &mut MutexGuard<BlocksMutex>, p
 
     match search_block {
         Some(found_block) => {
-            let (block, next, downloaded) = blocks_mutex_guard.blocks_id.get(found_block.idx).unwrap();
+            let (hash, next, downloaded) = blocks_mutex_guard.blocks_id.get(found_block.idx).unwrap();
             if !downloaded {
-                blocks_mutex_guard.blocks_id[found_block.idx] = (block.to_string(), *next, true);
+                blocks_mutex_guard.blocks_id[found_block.idx] = (hash.to_string(), *next, true);
                 return Ok(parsed)
             }
             Err(ProcessBlockMessageError::BlockAlreadyDownloaded)
