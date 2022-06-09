@@ -63,7 +63,7 @@ fn handle_incoming_message<'a>(connection:& TcpStream, sender: &Sender<String>, 
     let mut lecture:usize = 0; // Garde pour éviter connection infinie inutile
     loop {
         // println!("Lecture de {}", target_address);
-        match bcmessage::read_message(&connection) { // TODO : check if is blocking
+        match bcmessage::read_message(&connection) {
             Err(_error) => return &CONN_CLOSE,
             Ok((command, payload)) => {
                 lecture+=1;
