@@ -3,6 +3,7 @@ mod bcblocks;
 mod bcfile;
 mod bcnet;
 mod bcpeers;
+mod bcparse;
 
 use clap::{Arg, App};
 use std::sync::mpsc;

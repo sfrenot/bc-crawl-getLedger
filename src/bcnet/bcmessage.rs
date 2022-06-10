@@ -11,7 +11,8 @@ use std::convert::TryInto;
 use hex::{FromHex};
 use crate::bcblocks;
 use bitcoin_hashes::{sha256d, Hash};
-use crate::bcblocks::{Block, BlocksMutex, parse_block, ParsingError};
+use crate::bcblocks::BlocksMutex;
+use crate::bcparse::{Block, parse_block, ParsingError};
 use crate::bcnet::bcmessage::ProcessBlockMessageError::Parsing;
 
 pub const VERSION:u32 = 70015;

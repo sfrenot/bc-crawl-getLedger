@@ -6,7 +6,7 @@ use lazy_static::lazy_static;
 use std::sync::Mutex;
 use crate::bcblocks;
 use chrono::{DateTime, Utc};
-use crate::bcblocks::Block;
+use crate::bcparse::Block;
 use crate::bcnet::bcmessage::reverse_hash;
 
 lazy_static! {
