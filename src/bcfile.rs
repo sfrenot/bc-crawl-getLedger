@@ -89,8 +89,7 @@ pub fn store_headers(blocks: &Vec<(String, bool, bool)>) -> bool {
 }
 
 pub fn store_block(block: &Block) {
-    let rev_hash = reverse_hash(&block.hash);
-    let dir_path = "./blocks/".to_owned() + &rev_hash[rev_hash.len()-2..];
+    let dir_path = "./blocks/".to_owned() + &block.hash[block.hash.len()-2..];
     match fs::create_dir_all(&dir_path) {
         Ok(_) => {}
         Err(err) => {
@@ -98,11 +97,11 @@ pub fn store_block(block: &Block) {
             std::process::exit(1)
         }
     }
-    let mut file = File::create(format!("{}/{}.json", dir_path, rev_hash)).unwrap();
+    let mut file = File::create(format!("{}/{}.json", dir_path, block.hash)).unwrap();
     file.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
 
     let mut f = File::options().append(true).create(true).open("./to_update.lock").unwrap();
-    f.write_all(rev_hash.as_bytes()).unwrap();
+    f.write_all(block.hash.as_bytes()).unwrap();
     f.write_all(b"\n").unwrap();
     *TO_UPDATE_COUNT.lock().unwrap() += 1;
 }

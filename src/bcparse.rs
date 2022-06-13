@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 use bitcoin_hashes::{Hash, sha256d};
 use serde::{Deserialize, Serialize};
-use crate::bcnet::bcmessage::get_compact_int;
+use crate::bcnet::bcmessage::{get_compact_int, reverse_hash};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Block {
@@ -67,7 +67,7 @@ pub fn parse_block(payload: &Vec<u8>) -> Result<Block, ParsingError> {
 
     // header hash
     temp_bytes = payload.get(..80).ok_or(ParsingError)?;
-    block.hash = hex::encode(sha256d::Hash::hash(temp_bytes).to_vec());
+    block.hash = sha256d::Hash::hash(temp_bytes).to_string();
 
     // version
     temp_bytes = &payload[..4];
@@ -76,7 +76,8 @@ pub fn parse_block(payload: &Vec<u8>) -> Result<Block, ParsingError> {
 
     // previous block hash
     temp_bytes = &payload[offset..offset+32];
-    block.prev_hash = hex::encode(temp_bytes);
+    let prev_hash = hex::encode(temp_bytes);
+    block.prev_hash = reverse_hash(&prev_hash);
     offset += 32;
 
     // merkle root hash
@@ -190,12 +191,14 @@ pub fn parse_transaction(payload: &Vec<u8>) -> Result<(Transaction, usize), Pars
     offset += 4;
 
     // hash
+    let hash;
     if txn.segwit_flag {
         raw_txn.extend_from_slice(temp_bytes);
-        txn.hash = hex::encode(sha256d::Hash::hash(&raw_txn));
+        hash = hex::encode(sha256d::Hash::hash(&raw_txn));
     } else {
-        txn.hash = hex::encode(sha256d::Hash::hash(&payload[..offset]));
+        hash = hex::encode(sha256d::Hash::hash(&payload[..offset]));
     }
+    txn.hash = reverse_hash(&hash);
 
     Ok((txn, offset))
 }
@@ -207,7 +210,8 @@ fn parse_tx_in(payload: &Vec<u8>) -> Result<(TxIn, usize), ParsingError> {
 
     // previous transaction hash
     temp_bytes = payload.get(..32).ok_or(ParsingError)?;
-    tx_in.prev_hash = hex::encode(temp_bytes);
+    let prev_hash = hex::encode(temp_bytes);
+    tx_in.prev_hash = reverse_hash(&prev_hash);
     offset += 32;
 
     // previous transaction output index
