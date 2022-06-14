@@ -7,7 +7,6 @@ use std::sync::Mutex;
 use crate::bcblocks;
 use chrono::{DateTime, Utc};
 use crate::bcparse::Block;
-use crate::bcnet::bcmessage::reverse_hash;
 
 lazy_static! {
     pub static ref LOGGER: Mutex<LineWriter<Box<dyn Write + Send>>> = Mutex::new(LineWriter::new(Box::new(stdout())));
