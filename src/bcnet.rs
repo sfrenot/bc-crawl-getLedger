@@ -89,68 +89,6 @@ fn handle_incoming_message<'a>(connection:& TcpStream, sender: &Sender<String>, 
                     },
                     _ => {}
                 };
-                //
-                // //Testing incoming message
-                // // if command == String::from(GET_HEADERS){
-                // //     eprintln!("GET-HEADERS {}", hex::encode(&payload));
-                // //     std::process::exit(1);
-                // // }
-                //
-
-                // if command == String::from(INV){
-                //     //TODO: must migrate to bcmessage::process_inv_message
-                //     //TODO: check inv_size -> get_compact_int
-                //
-                //     let inv_size = payload[0];
-                //     let inv_length = 36;
-                //     let block_length = 32;
-                //     let mut offset = 0;
-                //     for _i in 0..inv_size {
-                //         if payload[offset+1] == 0x02 {
-                //             let mut toto:[u8; 32] = [0x00; 32] ;
-                //             // eprint!("BLOCK ==> ");
-                //             for val in 0..block_length {
-                //                 toto[val] = payload[offset+inv_length-val];
-                //             }
-                //             if toto[0] != 0x00 {
-                //                 eprintln!("Etrange {:02x?}", payload);
-                //                 // std::process::exit(1);
-                //             } else {
-                //                 let block_name = hex::encode(&toto);
-                //                 if bcblocks::is_new(block_name.clone()) {
-                //
-                //                     let get_data = format_args!("{msg}/{block}", msg=GET_DATA, block=block_name).to_string();
-                //                     eprintln!("Recherche du block {}", get_data);
-                //
-                //                     match in_chain.send(get_data) {
-                //                         Err(error) => {
-                //                             eprintln!("Erreur Send chan : {} ip : {}", error, &target_address);
-                //                         }
-                //                         _ => {}
-                //                     }
-                //                 }
-                //             }
-                //         }
-                //         offset+=inv_length;
-                //     }
-                // }
-
-                // if command == String::from(BLOCK){
-                //     //TODO: must migrate to bcmessage
-                //     eprintln!("BLOCK : {:02x?}", &payload[..100]);
-                //
-                //     let hash = sha256d::Hash::hash(&payload[..80]);
-                //
-                //     let mut previous_block = [0;32];
-                //     previous_block.clone_from_slice(&payload[4..36]);
-                //     previous_block.reverse();
-                //
-                //     eprintln!("previous: {}, current: {:?}", hex::encode(&previous_block), hash.to_string());
-                //
-                //     // !!!!!!!!!!
-                //     std::process::exit(1);
-                // }
-
             }
         };
         if lecture > NB_MAX_READ_ON_SOCKET {
