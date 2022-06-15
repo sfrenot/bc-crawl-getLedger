@@ -11,7 +11,8 @@ use std::convert::TryInto;
 use hex::{FromHex};
 use crate::bcblocks;
 use bitcoin_hashes::{sha256d, Hash};
-use crate::bcblocks::{Block, BlocksMutex, parse_block, ParsingError};
+use crate::bcblocks::BlocksMutex;
+use crate::bcparse::{Block, parse_block, ParsingError};
 use crate::bcnet::bcmessage::ProcessBlockMessageError::Parsing;
 
 pub const VERSION:u32 = 70015;
@@ -324,14 +325,13 @@ impl From<ParsingError> for ProcessBlockMessageError {
 
 pub fn process_block_message(blocks_mutex_guard: &mut MutexGuard<BlocksMutex>, payload: &Vec<u8>) -> Result<Block, ProcessBlockMessageError>{
     let parsed = parse_block(payload)?;
-    let rev_hash = reverse_hash(&parsed.hash);
-    let search_block = blocks_mutex_guard.known_blocks.get(&rev_hash).cloned();
+    let search_block = blocks_mutex_guard.known_blocks.get(&parsed.hash).cloned();
 
     match search_block {
         Some(found_block) => {
-            let (block, next, downloaded) = blocks_mutex_guard.blocks_id.get(found_block.idx).unwrap();
+            let (hash, next, downloaded) = blocks_mutex_guard.blocks_id.get(found_block.idx).unwrap();
             if !downloaded {
-                blocks_mutex_guard.blocks_id[found_block.idx] = (block.to_string(), *next, true);
+                blocks_mutex_guard.blocks_id[found_block.idx] = (hash.to_string(), *next, true);
                 return Ok(parsed)
             }
             Err(ProcessBlockMessageError::BlockAlreadyDownloaded)

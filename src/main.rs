@@ -3,6 +3,7 @@ mod bcblocks;
 mod bcfile;
 mod bcnet;
 mod bcpeers;
+mod bcparse;
 
 use clap::{Arg, App};
 use std::sync::mpsc;
@@ -67,7 +68,7 @@ fn check_pool_size(start_time: SystemTime ){
 fn parse_args() -> String {
     let matches = App::new("BC crawl")
         .version("1.0.0")
-        .author("Jazmin Ferreiro  <jazminsofiaf@gmail.com>, Stephane Frenot <stephane.frenot@insa-lyon.fr>")
+        .author("Jazmin Ferreiro  <jazminsofiaf@gmail.com>, Stephane Frenot <stephane.frenot@insa-lyon.fr>, Hugo Thomas <thomas.hugo18@sfr.fr>")
         .arg(Arg::with_name("file")
             .short("-o")
             .long("output")

@@ -63,7 +63,7 @@ fn handle_incoming_message<'a>(connection:& TcpStream, sender: &Sender<String>, 
     let mut lecture:usize = 0; // Garde pour éviter connection infinie inutile
     loop {
         // println!("Lecture de {}", target_address);
-        match bcmessage::read_message(&connection) { // TODO : check if is blocking
+        match bcmessage::read_message(&connection) {
             Err(_error) => return &CONN_CLOSE,
             Ok((command, payload)) => {
                 lecture+=1;
@@ -172,6 +172,9 @@ fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize) -> bool
     match bcmessage::process_block_message(&mut blocks_mutex_guard, payload) {
         Ok(block) => {
             bcfile::store_block(&block);
+            if *bcfile::TO_UPDATE_COUNT.lock().unwrap() >= 50 {
+                bcfile::store_headers(&blocks_mutex_guard.blocks_id);
+            }
             bcblocks::create_getdata_message_payload(&blocks_mutex_guard.blocks_id);
             *lecture = 0;
             eprintln!("new block stored");
