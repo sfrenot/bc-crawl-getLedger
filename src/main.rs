@@ -9,7 +9,6 @@ use trust_dns_resolver::Resolver;
 use trust_dns_resolver::config::ResolverConfig;
 use trust_dns_resolver::config::ResolverOpts;
 
-use clap::{Arg, App};
 use std::sync::mpsc;
 use std::sync::atomic::Ordering;
 
@@ -19,13 +18,14 @@ use std::process;
 use std::time::{Duration, SystemTime};
 
 const CHECK_TERMINATION_TIMEOUT:Duration = Duration::from_secs(5);
-const THREADS: u64 = 500;
+const THREADS: u64 = 100;
 const MESSAGE_CHANNEL_SIZE: usize = 100000;
 const DNS_START: &str = "seed.btc.petertodd.org";
 const PORT_START: &str = "8333";
-
+const LOG_FILE: &str = "./file.txt";
 
 fn main() {
+    bcfile::open_logfile(LOG_FILE);
     bcfile::load_blocks();
     bcblocks::create_block_message_payload(&bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id);
     bcblocks::create_getdata_message_payload(&bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id);
@@ -40,8 +40,6 @@ fn main() {
 
     let (address_channel_sender, address_channel_receiver) = mpsc::channel();
     let (connecting_start_channel_sender, connecting_start_channel_receiver) = chan::sync(MESSAGE_CHANNEL_SIZE);
-
-    let start_adress = parse_args();
 
     thread::spawn(move || { check_pool_size(SystemTime::now()); });
 
@@ -69,39 +67,10 @@ fn check_pool_size(start_time: SystemTime ){
     loop {
         thread::sleep(CHECK_TERMINATION_TIMEOUT);
         bcpeers::get_peers_status();
-        let remains = bcpeers::NB_ADDR_TO_TEST.load(Ordering::Relaxed);
-        eprintln!("Il reste {} adresses à tester", remains);
-        if remains < 1 {
+        if bcpeers::NB_ADDR_TO_TEST.load(Ordering::Relaxed) < 1 {
             let time_spent = SystemTime::now().duration_since(start_time).unwrap_or_default();
             println!("POOL Crawling ends in {:?} ", time_spent);
             process::exit(0);
         }
     }
-}
-
-fn parse_args() -> String {
-    let matches = App::new("BC crawl")
-        .version("1.0.0")
-        .author("Jazmin Ferreiro  <jazminsofiaf@gmail.com>, Stephane Frenot <stephane.frenot@insa-lyon.fr>, Hugo Thomas <thomas.hugo18@sfr.fr>")
-        .arg(Arg::with_name("file")
-            .short("-o")
-            .long("output")
-            .takes_value(true)
-            .required(true)
-            .help("output file name for crawl"))
-        .arg(Arg::with_name("address")
-            .short("-s")
-            .long("address")
-            .takes_value(true)
-            .required(true)
-            .help(" Initial address for crawling. Format [a.b.c.d]:ppp"))
-        .get_matches();
-
-    let arg_address = matches.value_of("address").unwrap_or_else(|| {
-        panic!("Error parsing address argument");
-        }
-    );
-
-    bcfile::open_logfile(matches.value_of("file"));
-    String::from(arg_address)
 }

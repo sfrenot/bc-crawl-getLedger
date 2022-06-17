@@ -4,7 +4,7 @@ TODO
 # Bitcoin Crawl
 
 This program is a bitcoin crawler. Starting with an address look for more peer's addresses in the networks.
-It make use of [bitcoin network protocol](https://en.bitcoin.it/wiki/Protocol_documentation) to send and receive message from peers. 
+It make use of [bitcoin network protocol](https://en.bitcoin.it/wiki/Protocol_documentation) to send and receive message from peers.
 
 ## Performance
 
@@ -25,17 +25,7 @@ for other operation sistem check [rust site](https://www.rust-lang.org/learn/get
 ## Running
 Au premier démarrage copier blocks.genesis.json -> blocks.json
 
-After clone this project, open a terminal in the project directory 
-```
-dig seed.btc.petertodd.org
-```
-Choose one of the addresses: i.e. '34.136.23.218'
-
-```
-cargo run -- -o file.txt -s '34.136.23.218:8333'
-```
-
-sometimes can return Error connection timeout
+Lancer directement `cargo run`
 
 BUGS :
  ulimit -> Augmenter la taille des fichiers ouvert -> ulimit -n 65535
@@ -48,9 +38,9 @@ We can see a print of the execution bitcoin crawler in go language
 And a print of a execution of this bitcoin crawler in rust
 ![result in rust](https://github.com/jazminsofiaf/bc-crawl/blob/master/rust.png)
 
-The program in go spent 1 min 57 seg while program in rust spent 1m 44 seg. 
-A difference of 13 seg. It is important to mention that this is only one example and the result can change in every execution. 
-The time spent depends on the peers time of connection. 
+The program in go spent 1 min 57 seg while program in rust spent 1m 44 seg.
+A difference of 13 seg. It is important to mention that this is only one example and the result can change in every execution.
+The time spent depends on the peers time of connection.
 
 
 ### Conclusion

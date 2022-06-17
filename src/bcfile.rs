@@ -105,15 +105,8 @@ pub fn store_block(block: &Block) {
     *TO_UPDATE_COUNT.lock().unwrap() += 1;
 }
 
-/// Addr storage
-pub fn open_logfile(arg_file: Option<&str>) {
-    let file: File;
-    match arg_file {
-        None => panic!("Error parsing file name"),
-        Some(f) =>  {
-            file = File::create(f).unwrap();
-        }
-    }
+pub fn open_logfile(file_name :&str) {
+    let file: File = File::create(file_name).unwrap();
     let mut logger = LOGGER.lock().unwrap();
     *logger = LineWriter::new(Box::new(file));
 }

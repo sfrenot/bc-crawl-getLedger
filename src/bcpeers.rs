@@ -70,7 +70,7 @@ pub fn get_peers_status() {
             _ => other +=1,
         }
     }
-    eprintln!("total: {}, Other: {}, Done: {}, Fail: {}", address_status.len(), other, done, fail);
+    eprintln!("total: {} : Reste à Tester: {}, Done: {}, Fail: {}", address_status.len(), other, done, fail);
 }
 
 // fn retry_address(a_peer: String)-> bool  {
