@@ -14,13 +14,14 @@ const BLOCKS_FILE: &str = "./blocks.json";
 const BLOCKS_TMP_FILE: &str = "./blocks.tmp.json";
 
 const BLOCKS_MARKS: usize  = 10000;
+const FLUSH_SIZE: u64 = 3200;
 const UPDATED_BLOCKS_FROM_GETBLOCK : &str = "./blocks_to_update_from_getblocks.lst";
 
 lazy_static! {
     pub static ref LOGGER: Mutex<LineWriter<Box<dyn Write + Send>>> = Mutex::new(LineWriter::new(Box::new(stdout())));
     // pub static ref BLOCKS: Mutex<LineWriter<Box<dyn Write + Send>>> = Mutex::new(LineWriter::new(Box::new(File::create("./blocks.raw").unwrap())));
     // pub static ref SORTIE:LineWriter<File> = LineWriter::new(File::create("./blocks.raw").unwrap());
-    pub static ref TO_UPDATE_COUNT: Mutex<usize> = Mutex::new(0);
+    // pub static ref TO_UPDATE_COUNT: Mutex<usize> = Mutex::new(0);
     // pub static ref SORTIE:LineWriter<File> = LineWriter::new(File::create(UPDATED_BLOCKS_FROM_GETBLOCK).unwrap());
     pub static ref HEADERS_FROM_BLOCKS: Mutex<File> = Mutex::new(File::options().append(true).create(true).open(UPDATED_BLOCKS_FROM_GETBLOCK).unwrap());
 }
@@ -98,7 +99,6 @@ pub fn store_headers(headers: &Vec<(String, bool, bool)>) -> bool {
     fs::rename(BLOCKS_TMP_FILE, BLOCKS_FILE).unwrap();
 
     HEADERS_FROM_BLOCKS.lock().unwrap().set_len(0).unwrap();
-    *TO_UPDATE_COUNT.lock().unwrap() = 0;
 
     new_blocks
 }
@@ -112,10 +112,10 @@ pub fn store_block(blocks_id: &Vec<(String, bool, bool)>, block: &Block) {
     let mut out = HEADERS_FROM_BLOCKS.lock().unwrap();
     out.write_all(block.hash.as_bytes()).unwrap();
     out.write_all(b"\n").unwrap();
-    drop(out);
 
-    *TO_UPDATE_COUNT.lock().unwrap() += 1;
-    if *TO_UPDATE_COUNT.lock().unwrap() >= 50 {
+    if *&out.metadata().unwrap().len() > FLUSH_SIZE {
+        // eprintln!("Taille :{}", &out.metadata().unwrap().len());
+        drop(out);
         store_headers(&blocks_id);
     }
 }
