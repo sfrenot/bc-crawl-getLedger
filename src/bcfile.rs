@@ -9,8 +9,9 @@ use crate::bcblocks;
 use chrono::{DateTime, Utc};
 use crate::bcparse::Block;
 
-const BLOCKS_FILE : &str = "./blocks.json";
-const BLOCKS_TMP_FILE : &str = "./blocks.tmp.json";
+const BLOCKS_DIR: &str = "./blocks";
+const BLOCKS_FILE: &str = "./blocks.json";
+const BLOCKS_TMP_FILE: &str = "./blocks.tmp.json";
 
 const BLOCKS_MARKS: usize  = 10000;
 const UPDATED_BLOCKS_FROM_GETBLOCK : &str = "./blocks_to_update_from_getblocks.lst";
@@ -18,11 +19,12 @@ const UPDATED_BLOCKS_FROM_GETBLOCK : &str = "./blocks_to_update_from_getblocks.l
 lazy_static! {
     pub static ref LOGGER: Mutex<LineWriter<Box<dyn Write + Send>>> = Mutex::new(LineWriter::new(Box::new(stdout())));
     // pub static ref BLOCKS: Mutex<LineWriter<Box<dyn Write + Send>>> = Mutex::new(LineWriter::new(Box::new(File::create("./blocks.raw").unwrap())));
-    pub static ref SORTIE:LineWriter<File> = LineWriter::new(File::create("./blocks.raw").unwrap());
+    // pub static ref SORTIE:LineWriter<File> = LineWriter::new(File::create("./blocks.raw").unwrap());
     pub static ref TO_UPDATE_COUNT: Mutex<usize> = Mutex::new(0);
+    // pub static ref SORTIE:LineWriter<File> = LineWriter::new(File::create(UPDATED_BLOCKS_FROM_GETBLOCK).unwrap());
+
 }
 
-/// Header storage
 #[derive(Debug, Deserialize)]
 pub struct Header {
     pub elem: String,
@@ -30,12 +32,12 @@ pub struct Header {
     pub downloaded: bool
 }
 
-fn read_block_file() -> Vec<Header> {
+fn read_block_file_at_startup() -> Vec<Header> {
     eprintln!("Début lecture fichier blocks");
     serde_json::from_reader(BufReader::new(File::open(BLOCKS_FILE).unwrap())).unwrap()
 }
 
-fn create_internal_struct(blocks: Vec<Header>) {
+fn create_internal_struct_at_startup(blocks: Vec<Header>) {
     eprintln!("Début création structures");
     let mut idx:usize = 1;
     let mut previous: String = "".to_string();
@@ -57,7 +59,7 @@ fn create_internal_struct(blocks: Vec<Header>) {
     }
 }
 
-fn update_blocks_from_getblocks() {
+fn inject_pending_headers_from_previous_run_at_startup() {
     let fichier = Path::new(UPDATED_BLOCKS_FROM_GETBLOCK);
     if fichier.exists() {
         eprintln!("\nLecture fichier temporaire des blocks chargés");
@@ -68,25 +70,24 @@ fn update_blocks_from_getblocks() {
             let (hash, next, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
             blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true);
         }
-        fs::remove_file(fichier).unwrap();
         store_headers(&blocks_mutex_guard.blocks_id);
     }
 }
 
-pub fn load_blocks() {
+pub fn load_headers_at_startup() {
     if Path::new(BLOCKS_TMP_FILE).exists() {fs::remove_file(BLOCKS_TMP_FILE).unwrap();}
-    create_internal_struct(read_block_file());
-    update_blocks_from_getblocks();
+    create_internal_struct_at_startup(read_block_file_at_startup());
+    inject_pending_headers_from_previous_run_at_startup();
 }
 
-pub fn store_headers(blocks: &Vec<(String, bool, bool)>) -> bool {
+pub fn store_headers(headers: &Vec<(String, bool, bool)>) -> bool {
     let mut file = LineWriter::new(File::create(BLOCKS_TMP_FILE).unwrap());
     let mut new_blocks = false;
     file.write_all(b"[\n").unwrap();
-    for i in 1..blocks.len() {
-        let (block, next, downloaded) = &blocks[i];
+    for i in 1..headers.len() {
+        let (block, next, downloaded) = &headers[i];
         file.write_all(format!("\t {{\"elem\": \"{}\", \"next\": {}, \"downloaded\": {}}}", block, next, downloaded).as_ref()).unwrap();
-        if i < blocks.len()-1 {
+        if i < headers.len()-1 {
          file.write_all(b",\n").unwrap();
         } else {
          file.write_all(b"\n").unwrap();
@@ -97,20 +98,26 @@ pub fn store_headers(blocks: &Vec<(String, bool, bool)>) -> bool {
     }
     file.write_all(b"]").unwrap();
     fs::rename(BLOCKS_TMP_FILE, BLOCKS_FILE).unwrap();
+
+    if Path::new(UPDATED_BLOCKS_FROM_GETBLOCK).exists() {fs::remove_file(UPDATED_BLOCKS_FROM_GETBLOCK).unwrap();}
     *TO_UPDATE_COUNT.lock().unwrap() = 0;
     new_blocks
 }
 
-pub fn store_block(block: &Block) {
-    let dir_path = "./blocks/".to_owned() + &block.hash[block.hash.len()-2..];
+pub fn store_block(blocks_id: &Vec<(String, bool, bool)>, block: &Block) {
+    let dir_path = format!("./{}/{}", BLOCKS_DIR, &block.hash[block.hash.len()-2..]);
     fs::create_dir_all(&dir_path).unwrap();
     let mut file = File::create(format!("{}/{}.json", dir_path, block.hash)).unwrap();
     file.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
 
-    let mut f = File::options().append(true).create(true).open("./to_update.lock").unwrap();
+    /* Add header in temporary file */
+    let mut f = File::options().append(true).create(true).open(UPDATED_BLOCKS_FROM_GETBLOCK).unwrap();
     f.write_all(block.hash.as_bytes()).unwrap();
     f.write_all(b"\n").unwrap();
     *TO_UPDATE_COUNT.lock().unwrap() += 1;
+    if *TO_UPDATE_COUNT.lock().unwrap() >= 50 {
+        store_headers(&blocks_id);
+    }
 }
 
 pub fn open_logfile(file_name :&str) {

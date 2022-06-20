@@ -171,10 +171,7 @@ fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize) -> bool
 
     match bcmessage::process_block_message(&mut blocks_mutex_guard, payload) {
         Ok(block) => {
-            bcfile::store_block(&block);
-            if *bcfile::TO_UPDATE_COUNT.lock().unwrap() >= 50 {
-                bcfile::store_headers(&blocks_mutex_guard.blocks_id);
-            }
+            bcfile::store_block(&blocks_mutex_guard.blocks_id, &block);
             bcblocks::create_getdata_message_payload(&blocks_mutex_guard.blocks_id);
             *lecture = 0;
             eprintln!("new block stored");
