@@ -1,6 +1,7 @@
 use std::io::{BufRead, BufReader};
 use serde::Deserialize;
 use std::fs::{self, File};
+use std::path::Path;
 use std::io::{self, LineWriter, stdout, Write};
 use lazy_static::lazy_static;
 use std::sync::Mutex;
@@ -9,9 +10,10 @@ use chrono::{DateTime, Utc};
 use crate::bcparse::Block;
 
 const BLOCKS_FILE : &str = "./blocks.json";
+const BLOCKS_TMP_FILE : &str = "./blocks.tmp.json";
+
 const BLOCKS_MARKS: usize  = 10000;
-const BLOCKS_TMP : &str = "./to_update.lock";
-const BLOCKS_FOUND : &str = "./blocks-found.json";
+const UPDATED_BLOCKS_FROM_GETBLOCK : &str = "./blocks_to_update_from_getblocks.lst";
 
 lazy_static! {
     pub static ref LOGGER: Mutex<LineWriter<Box<dyn Write + Send>>> = Mutex::new(LineWriter::new(Box::new(stdout())));
@@ -30,8 +32,7 @@ pub struct Header {
 
 fn read_block_file() -> Vec<Header> {
     eprintln!("Début lecture fichier blocks");
-    let file = File::open(BLOCKS_FILE).unwrap();
-    serde_json::from_reader(BufReader::new(file)).unwrap()
+    serde_json::from_reader(BufReader::new(File::open(BLOCKS_FILE).unwrap())).unwrap()
 }
 
 fn create_internal_struct(blocks: Vec<Header>) {
@@ -56,36 +57,30 @@ fn create_internal_struct(blocks: Vec<Header>) {
     }
 }
 
-fn add_temporary_blocks() {
-    eprintln!("\nLecture fichier lock (to_update.lock)");
-    let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
-    let reader = BufReader::new(File::open(BLOCKS_TMP).unwrap());
-    for line in reader.lines() {
-        // match blocks_mutex_guard.known_blocks.get(&line.unwrap()).cloned(){
-        //     Some(block) => {
-        //         let (hash, next, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
-        //         blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true);
-        //     }
-        //     None => {
-        //         eprintln!("Unknown hash in lock file");
-        //         std::process::exit(1);
-        //     }
-        // }
-
-        let block = blocks_mutex_guard.known_blocks.get(&line.unwrap()).cloned().unwrap();
-        let (hash, next, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
-        blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true);
+fn update_blocks_from_getblocks() {
+    let fichier = Path::new(UPDATED_BLOCKS_FROM_GETBLOCK);
+    if fichier.exists() {
+        eprintln!("\nLecture fichier temporaire des blocks chargés");
+        let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
+        let reader = BufReader::new(File::open(fichier).unwrap());
+        for line in reader.lines() {
+            let block = blocks_mutex_guard.known_blocks.get(&line.unwrap()).cloned().expect("Unknown hash in lock file");
+            let (hash, next, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
+            blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true);
+        }
+        fs::remove_file(fichier).unwrap();
+        store_headers(&blocks_mutex_guard.blocks_id);
     }
-    store_headers(&blocks_mutex_guard.blocks_id);
 }
 
 pub fn load_blocks() {
+    if Path::new(BLOCKS_TMP_FILE).exists() {fs::remove_file(BLOCKS_TMP_FILE).unwrap();}
     create_internal_struct(read_block_file());
-    add_temporary_blocks();
+    update_blocks_from_getblocks();
 }
 
 pub fn store_headers(blocks: &Vec<(String, bool, bool)>) -> bool {
-    let mut file = LineWriter::new(File::create(BLOCKS_FOUND).unwrap());
+    let mut file = LineWriter::new(File::create(BLOCKS_TMP_FILE).unwrap());
     let mut new_blocks = false;
     file.write_all(b"[\n").unwrap();
     for i in 1..blocks.len() {
@@ -101,22 +96,14 @@ pub fn store_headers(blocks: &Vec<(String, bool, bool)>) -> bool {
         }
     }
     file.write_all(b"]").unwrap();
-    drop(file);
-    fs::rename("./blocks-found.json", "./blocks.json").unwrap();
-    let _ = fs::remove_file("./to_update.lock");
+    fs::rename(BLOCKS_TMP_FILE, BLOCKS_FILE).unwrap();
     *TO_UPDATE_COUNT.lock().unwrap() = 0;
     new_blocks
 }
 
 pub fn store_block(block: &Block) {
     let dir_path = "./blocks/".to_owned() + &block.hash[block.hash.len()-2..];
-    match fs::create_dir_all(&dir_path) {
-        Ok(_) => {}
-        Err(err) => {
-            eprintln!("Error writing block to disk: {}", err);
-            std::process::exit(1)
-        }
-    }
+    fs::create_dir_all(&dir_path).unwrap();
     let mut file = File::create(format!("{}/{}.json", dir_path, block.hash)).unwrap();
     file.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
 
