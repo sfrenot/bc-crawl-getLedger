@@ -1,12 +1,17 @@
 use std::io::{BufRead, BufReader};
 use serde::Deserialize;
 use std::fs::{self, File};
-use std::io::{LineWriter, stdout, Write};
+use std::io::{self, LineWriter, stdout, Write};
 use lazy_static::lazy_static;
 use std::sync::Mutex;
 use crate::bcblocks;
 use chrono::{DateTime, Utc};
 use crate::bcparse::Block;
+
+const BLOCKS_FILE : &str = "./blocks.json";
+const BLOCKS_MARKS: usize  = 10000;
+const BLOCKS_TMP : &str = "./to_update.lock";
+const BLOCKS_FOUND : &str = "./blocks-found.json";
 
 lazy_static! {
     pub static ref LOGGER: Mutex<LineWriter<Box<dyn Write + Send>>> = Mutex::new(LineWriter::new(Box::new(stdout())));
@@ -23,17 +28,23 @@ pub struct Header {
     pub downloaded: bool
 }
 
-pub fn load_blocks() {
+fn read_block_file() -> Vec<Header> {
     eprintln!("Début lecture fichier blocks");
-    let file = File::open("./blocks.json").unwrap();
-    let blocks: Vec<Header> = serde_json::from_reader(BufReader::new(file)).unwrap();
+    let file = File::open(BLOCKS_FILE).unwrap();
+    serde_json::from_reader(BufReader::new(file)).unwrap()
+}
 
-    let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
-
+fn create_internal_struct(blocks: Vec<Header>) {
+    eprintln!("Début création structures");
     let mut idx:usize = 1;
     let mut previous: String = "".to_string();
+    let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
     for item in blocks {
         // eprintln!("-> {}", item.elem);
+        if idx % BLOCKS_MARKS == 0 {
+            eprint!("*");
+            io::stderr().flush().unwrap();
+        }
         blocks_mutex_guard.blocks_id.push((item.elem.clone(), item.next, item.downloaded));
         blocks_mutex_guard.known_blocks.insert(item.elem.clone(), bcblocks::BlockDesc{idx, previous});
         if item.next {
@@ -43,28 +54,38 @@ pub fn load_blocks() {
         }
         idx+=1;
     }
+}
 
-    if let Ok(f) = File::open("./to_update.lock") {
-        let reader = BufReader::new(f);
-        for line in reader.lines() {
-            match blocks_mutex_guard.known_blocks.get(&line.unwrap()).cloned(){
-                Some(block) => {
-                    let (hash, next, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
-                    blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true);
-                }
-                None => {
-                    eprintln!("Unknown hash in lock file");
-                    std::process::exit(1);
-                }
-            }
-        }
-        store_headers(&blocks_mutex_guard.blocks_id);
+fn add_temporary_blocks() {
+    eprintln!("\nLecture fichier lock (to_update.lock)");
+    let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
+    let reader = BufReader::new(File::open(BLOCKS_TMP).unwrap());
+    for line in reader.lines() {
+        // match blocks_mutex_guard.known_blocks.get(&line.unwrap()).cloned(){
+        //     Some(block) => {
+        //         let (hash, next, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
+        //         blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true);
+        //     }
+        //     None => {
+        //         eprintln!("Unknown hash in lock file");
+        //         std::process::exit(1);
+        //     }
+        // }
+
+        let block = blocks_mutex_guard.known_blocks.get(&line.unwrap()).cloned().unwrap();
+        let (hash, next, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
+        blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true);
     }
-    eprintln!("Fin lecture fichier blocks");
+    store_headers(&blocks_mutex_guard.blocks_id);
+}
+
+pub fn load_blocks() {
+    create_internal_struct(read_block_file());
+    add_temporary_blocks();
 }
 
 pub fn store_headers(blocks: &Vec<(String, bool, bool)>) -> bool {
-    let mut file = LineWriter::new(File::create("./blocks-found.json").unwrap());
+    let mut file = LineWriter::new(File::create(BLOCKS_FOUND).unwrap());
     let mut new_blocks = false;
     file.write_all(b"[\n").unwrap();
     for i in 1..blocks.len() {
