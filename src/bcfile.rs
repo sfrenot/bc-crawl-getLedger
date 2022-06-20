@@ -22,7 +22,7 @@ lazy_static! {
     // pub static ref SORTIE:LineWriter<File> = LineWriter::new(File::create("./blocks.raw").unwrap());
     pub static ref TO_UPDATE_COUNT: Mutex<usize> = Mutex::new(0);
     // pub static ref SORTIE:LineWriter<File> = LineWriter::new(File::create(UPDATED_BLOCKS_FROM_GETBLOCK).unwrap());
-
+    pub static ref HEADERS_FROM_BLOCKS: Mutex<File> = Mutex::new(File::options().append(true).create(true).open(UPDATED_BLOCKS_FROM_GETBLOCK).unwrap());
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,18 +60,16 @@ fn create_internal_struct_at_startup(blocks: Vec<Header>) {
 }
 
 fn inject_pending_headers_from_previous_run_at_startup() {
-    let fichier = Path::new(UPDATED_BLOCKS_FROM_GETBLOCK);
-    if fichier.exists() {
-        eprintln!("\nLecture fichier temporaire des blocks chargés");
-        let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
-        let reader = BufReader::new(File::open(fichier).unwrap());
-        for line in reader.lines() {
-            let block = blocks_mutex_guard.known_blocks.get(&line.unwrap()).cloned().expect("Unknown hash in lock file");
-            let (hash, next, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
-            blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true);
-        }
-        store_headers(&blocks_mutex_guard.blocks_id);
+    eprintln!("\nLecture fichier temporaire des blocks chargés");
+    let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
+    let reader = BufReader::new(File::open(Path::new(UPDATED_BLOCKS_FROM_GETBLOCK)).unwrap());
+
+    for line in reader.lines() {
+        let block = blocks_mutex_guard.known_blocks.get(&line.unwrap()).cloned().expect("Unknown hash in lock file");
+        let (hash, next, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
+        blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true);
     }
+    store_headers(&blocks_mutex_guard.blocks_id);
 }
 
 pub fn load_headers_at_startup() {
@@ -99,8 +97,9 @@ pub fn store_headers(headers: &Vec<(String, bool, bool)>) -> bool {
     file.write_all(b"]").unwrap();
     fs::rename(BLOCKS_TMP_FILE, BLOCKS_FILE).unwrap();
 
-    if Path::new(UPDATED_BLOCKS_FROM_GETBLOCK).exists() {fs::remove_file(UPDATED_BLOCKS_FROM_GETBLOCK).unwrap();}
+    HEADERS_FROM_BLOCKS.lock().unwrap().set_len(0).unwrap();
     *TO_UPDATE_COUNT.lock().unwrap() = 0;
+
     new_blocks
 }
 
@@ -110,10 +109,11 @@ pub fn store_block(blocks_id: &Vec<(String, bool, bool)>, block: &Block) {
     let mut file = File::create(format!("{}/{}.json", dir_path, block.hash)).unwrap();
     file.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
 
-    /* Add header in temporary file */
-    let mut f = File::options().append(true).create(true).open(UPDATED_BLOCKS_FROM_GETBLOCK).unwrap();
-    f.write_all(block.hash.as_bytes()).unwrap();
-    f.write_all(b"\n").unwrap();
+    let mut out = HEADERS_FROM_BLOCKS.lock().unwrap();
+    out.write_all(block.hash.as_bytes()).unwrap();
+    out.write_all(b"\n").unwrap();
+    drop(out);
+
     *TO_UPDATE_COUNT.lock().unwrap() += 1;
     if *TO_UPDATE_COUNT.lock().unwrap() >= 50 {
         store_headers(&blocks_id);
