@@ -79,9 +79,8 @@ pub fn load_headers_at_startup() {
     inject_pending_headers_from_previous_run_at_startup();
 }
 
-pub fn store_headers(headers: &Vec<(String, bool, bool)>) -> bool {
+pub fn store_headers(headers: &Vec<(String, bool, bool)>) {
     let mut file = LineWriter::new(File::create(BLOCKS_TMP_FILE).unwrap());
-    let mut new_blocks = false;
     file.write_all(b"[\n").unwrap();
     for i in 1..headers.len() {
         let (block, next, downloaded) = &headers[i];
@@ -91,16 +90,11 @@ pub fn store_headers(headers: &Vec<(String, bool, bool)>) -> bool {
         } else {
          file.write_all(b"\n").unwrap();
         }
-        if !new_blocks && !*next {
-            new_blocks = true;
-        }
     }
     file.write_all(b"]").unwrap();
     fs::rename(BLOCKS_TMP_FILE, BLOCKS_FILE).unwrap();
 
     HEADERS_FROM_BLOCKS.lock().unwrap().set_len(0).unwrap();
-
-    new_blocks
 }
 
 pub fn store_block(blocks_id: &Vec<(String, bool, bool)>, block: &Block) {
@@ -114,7 +108,6 @@ pub fn store_block(blocks_id: &Vec<(String, bool, bool)>, block: &Block) {
     out.write_all(b"\n").unwrap();
 
     if *&out.metadata().unwrap().len() > FLUSH_SIZE {
-        // eprintln!("Taille :{}", &out.metadata().unwrap().len());
         drop(out);
         store_headers(&blocks_id);
     }

@@ -138,17 +138,12 @@ fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> boo
     // eprintln!("Status : {} -> {}", idx, block);
     match bcmessage::process_headers_message(&mut blocks_mutex_guard, payload) {
         Ok(()) => {
-            match bcfile::store_headers(&blocks_mutex_guard.blocks_id) {
-               true => {
-                   bcblocks::create_block_message_payload(&blocks_mutex_guard.blocks_id);
-                   eprintln!("new payload -> {:02x?}", hex::encode(&bcblocks::get_getheaders_message_payload()));
-                   *lecture = 0;
-                   true
-               },
-               false => {
-                   std::process::exit(1);
-               }
-           }
+            bcfile::store_headers(&blocks_mutex_guard.blocks_id);
+            bcblocks::create_block_message_payload(&blocks_mutex_guard.blocks_id);
+            // eprintln!("new payload -> {:02x?}", hex::encode(&bcblocks::get_getheaders_message_payload()));
+            eprintln!("new payload");
+            *lecture = 0;
+            true
         },
         Err(err) => {
             match err {
