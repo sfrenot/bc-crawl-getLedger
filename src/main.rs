@@ -24,8 +24,7 @@ const DNS_START: &str = "seed.btc.petertodd.org";
 const PORT_START: &str = "8333";
 const LOG_FILE: &str = "./file.txt";
 
-pub static mut LAST_VOL_HEADERS_FILE: usize = 0;
-pub static mut LAST_VOL_BLOCKS_DIR: u64 = 0;
+pub static mut LAST_VOL_BLOCKS_DIR: usize = 0;
 
 fn main() {
     bcfile::open_logfile(LOG_FILE);
@@ -74,9 +73,8 @@ fn check_pool_size(start_time: SystemTime ){
 
         eprintln!("Total: {} nodes\t -> TBD: {}, Done: {}, Fail: {}", total, other, done, failed);
         unsafe {
-            eprintln!("Volume / Speed\t\t -> Headers : {}/{},  Blocks : {}/{}", hedrs, (hedrs-LAST_VOL_HEADERS_FILE), blocks, (blocks-LAST_VOL_BLOCKS_DIR));
+            eprintln!("Volume / Speed\t\t -> Missing Headers : {},  Downloaded Blocks : {}/{}", hedrs,  blocks, (blocks-LAST_VOL_BLOCKS_DIR));
 
-            LAST_VOL_HEADERS_FILE = hedrs;
             LAST_VOL_BLOCKS_DIR = blocks;
         }
 

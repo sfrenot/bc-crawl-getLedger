@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use crate::bcblocks;
 use chrono::{DateTime, Utc};
 use crate::bcparse::Block;
-use fs_extra::dir::get_size;
+use fs_extra::dir::{DirOptions, get_dir_content2};
 use linecount::count_lines;
 
 const BLOCKS_DIR: &str = "./blocks";
@@ -86,11 +86,13 @@ pub fn store_headers(headers: &Vec<(String, bool, bool)>) {
     file.write_all(b"[\n").unwrap();
     for i in 1..headers.len() {
         let (block, next, downloaded) = &headers[i];
-        file.write_all(format!("\t {{\"elem\": \"{}\", \"next\": {}, \"downloaded\": {}}}", block, next, downloaded).as_ref()).unwrap();
-        if i < headers.len()-1 {
-         file.write_all(b",\n").unwrap();
-        } else {
-         file.write_all(b"\n").unwrap();
+        if !downloaded || !next {
+            file.write_all(format!("\t {{\"elem\": \"{}\", \"next\": {}, \"downloaded\": {}}}", block, next, downloaded).as_ref()).unwrap();
+            if i < headers.len()-1 {
+             file.write_all(b",\n").unwrap();
+            } else {
+             file.write_all(b"\n").unwrap();
+            }
         }
     }
     file.write_all(b"]").unwrap();
@@ -140,6 +142,6 @@ pub fn store_version_message(target_address: &String, (_, _, _, _): (u32, Vec<u8
     store_event(&msg);
 }
 
-pub fn get_vols() -> (usize, u64){
-    (count_lines(File::open(BLOCKS_FILE).unwrap()).unwrap(), get_size(BLOCKS_DIR).unwrap())
+pub fn get_vols() -> (usize, usize){
+    (count_lines(File::open(BLOCKS_FILE).unwrap()).unwrap(), get_dir_content2(BLOCKS_DIR, &DirOptions::new()).unwrap().files.len())
 }
