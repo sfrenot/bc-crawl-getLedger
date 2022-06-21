@@ -58,7 +58,7 @@ pub fn done(a_peer :String) {
     address_status.insert(a_peer, PeerStatus{status:Status::Done, _retries:0});
 }
 
-pub fn get_peers_status() {
+pub fn get_peers_status() -> (usize, usize, usize, usize) {
     let mut done = 0;
     let mut fail = 0;
     let mut other = 0;
@@ -70,7 +70,7 @@ pub fn get_peers_status() {
             _ => other +=1,
         }
     }
-    eprintln!("total: {} : Reste à Tester: {}, Done: {}, Fail: {}", address_status.len(), other, done, fail);
+    (address_status.len(), other, done, fail)
 }
 
 // fn retry_address(a_peer: String)-> bool  {

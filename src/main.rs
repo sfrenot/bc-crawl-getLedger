@@ -24,6 +24,9 @@ const DNS_START: &str = "seed.btc.petertodd.org";
 const PORT_START: &str = "8333";
 const LOG_FILE: &str = "./file.txt";
 
+pub static mut LAST_VOL_HEADERS_FILE: usize = 0;
+pub static mut LAST_VOL_BLOCKS_DIR: u64 = 0;
+
 fn main() {
     bcfile::open_logfile(LOG_FILE);
     bcfile::load_headers_at_startup();
@@ -66,7 +69,17 @@ fn main() {
 fn check_pool_size(start_time: SystemTime ){
     loop {
         thread::sleep(CHECK_TERMINATION_TIMEOUT);
-        bcpeers::get_peers_status();
+        let (total, other, done, failed) = bcpeers::get_peers_status();
+        let (hedrs, blocks) = bcfile::get_vols();
+
+        eprintln!("Total: {} nodes\t -> TBD: {}, Done: {}, Fail: {}", total, other, done, failed);
+        unsafe {
+            eprintln!("Volume / Speed\t\t -> Headers : {}/{},  Blocks : {}/{}", hedrs, (hedrs-LAST_VOL_HEADERS_FILE), blocks, (blocks-LAST_VOL_BLOCKS_DIR));
+
+            LAST_VOL_HEADERS_FILE = hedrs;
+            LAST_VOL_BLOCKS_DIR = blocks;
+        }
+
         if bcpeers::NB_ADDR_TO_TEST.load(Ordering::Relaxed) < 1 {
             let time_spent = SystemTime::now().duration_since(start_time).unwrap_or_default();
             println!("POOL Crawling ends in {:?} ", time_spent);

@@ -68,21 +68,22 @@ fn handle_incoming_message<'a>(connection:& TcpStream, sender: &Sender<String>, 
             Ok((command, payload)) => {
                 lecture+=1;
                 //eprintln!("Command From : {} --> {}, payload : {}", &target_address, &command, payload.len());
+                // if payload.len() <= 0 { panic!("Payload nul");}
                 match command {
-                    cmd if cmd == *MSG_VERSION && payload.len() > 0 => {
+                    cmd if cmd == *MSG_VERSION  => {
                         handle_incoming_cmd_version(&target_address, &payload);
                         return &MSG_VERSION;
                     },
                     cmd if cmd == *MSG_VERSION_ACK
                         => return &MSG_VERSION_ACK,
-                    cmd if cmd == *MSG_ADDR && payload.len() > 0 && handle_incoming_cmd_msg_addr(&payload, &sender)
+                    cmd if cmd == *MSG_ADDR && handle_incoming_cmd_msg_addr(&payload, &sender)
                         => return &MSG_GETADDR,
-                    cmd if cmd == *HEADERS  && payload.len() > 0
+                    cmd if cmd == *HEADERS
                         => return match handle_incoming_cmd_msg_header(&payload, &mut lecture) {
                             true  => &GET_HEADERS,
                             false => &CONN_CLOSE
                         },
-                    cmd if cmd == *BLOCK && payload.len() > 0
+                    cmd if cmd == *BLOCK
                         => return match handle_incoming_cmd_msg_block(&payload, &mut lecture) {
                         true => &GET_DATA,
                         false => &CONN_CLOSE
@@ -141,7 +142,7 @@ fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> boo
             bcfile::store_headers(&blocks_mutex_guard.blocks_id);
             bcblocks::create_block_message_payload(&blocks_mutex_guard.blocks_id);
             // eprintln!("new payload -> {:02x?}", hex::encode(&bcblocks::get_getheaders_message_payload()));
-            eprintln!("new payload");
+            // eprintln!("new payload");
             *lecture = 0;
             true
         },
@@ -169,7 +170,7 @@ fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize) -> bool
             bcfile::store_block(&blocks_mutex_guard.blocks_id, &block);
             bcblocks::create_getdata_message_payload(&blocks_mutex_guard.blocks_id);
             *lecture = 0;
-            eprintln!("new block stored");
+            // eprintln!("new block stored");
             true
         },
         Err(e) => {

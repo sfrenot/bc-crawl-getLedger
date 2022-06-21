@@ -8,6 +8,8 @@ use std::sync::Mutex;
 use crate::bcblocks;
 use chrono::{DateTime, Utc};
 use crate::bcparse::Block;
+use fs_extra::dir::get_size;
+use linecount::count_lines;
 
 const BLOCKS_DIR: &str = "./blocks";
 const BLOCKS_FILE: &str = "./blocks.json";
@@ -136,4 +138,8 @@ pub fn store_version_message(target_address: &String, (_, _, _, _): (u32, Vec<u8
     // msg.push_str(format!("since = {:?}  ",SystemTime::now().duration_since(SystemTime::from(peer_time)).unwrap_or_default() ).as_str());
     // msg.push_str(format!("services = {:?}\n", services ).as_str());
     store_event(&msg);
+}
+
+pub fn get_vols() -> (usize, u64){
+    (count_lines(File::open(BLOCKS_FILE).unwrap()).unwrap(), get_size(BLOCKS_DIR).unwrap())
 }
