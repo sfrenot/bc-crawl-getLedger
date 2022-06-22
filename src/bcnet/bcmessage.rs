@@ -315,9 +315,9 @@ pub fn process_block_message(payload: &Vec<u8>) -> Result<Block, ProcessBlockMes
 
     match search_block {
         Some(found_block) => {
-            let (hash, next, downloaded) = blocks_mutex_guard.blocks_id.get(found_block.idx).unwrap();
+            let (hash, next, downloaded, _) = blocks_mutex_guard.blocks_id.get(found_block.idx).unwrap();
             if !downloaded {
-                blocks_mutex_guard.blocks_id[found_block.idx] = (hash.to_string(), *next, true);
+                blocks_mutex_guard.blocks_id[found_block.idx] = (hash.to_string(), *next, true, false);
                 return Ok(parsed)
             }
             Err(ProcessBlockMessageError::BlockAlreadyDownloaded)

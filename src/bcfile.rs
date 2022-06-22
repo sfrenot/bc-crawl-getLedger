@@ -1,6 +1,6 @@
 use std::io::{BufRead, BufReader};
 use serde::Deserialize;
-use std::fs::{self, File};
+use std::fs::{self, OpenOptions, File};
 use std::path::Path;
 use std::io::{self, LineWriter, stdout, Write};
 use lazy_static::lazy_static;
@@ -51,7 +51,7 @@ fn create_internal_struct_at_startup(blocks: Vec<Header>) {
             eprint!("*");
             io::stderr().flush().unwrap();
         }
-        blocks_mutex_guard.blocks_id.push((item.elem.clone(), item.next, item.downloaded));
+        blocks_mutex_guard.blocks_id.push((item.elem.clone(), item.next, item.downloaded, false));
         blocks_mutex_guard.known_blocks.insert(item.elem.clone(), bcblocks::BlockDesc{idx, previous});
         if item.next {
             previous = item.elem;
@@ -65,12 +65,12 @@ fn create_internal_struct_at_startup(blocks: Vec<Header>) {
 fn inject_pending_headers_from_previous_run_at_startup() {
     eprintln!("\nLecture fichier temporaire des blocks chargés");
     let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
-    let reader = BufReader::new(File::open(Path::new(UPDATED_BLOCKS_FROM_GETBLOCK)).unwrap());
+    let reader = BufReader::new(OpenOptions::new().append(true).read(true).create(true).open(Path::new(UPDATED_BLOCKS_FROM_GETBLOCK)).unwrap());
 
     for line in reader.lines() {
         let block = blocks_mutex_guard.known_blocks.get(&line.unwrap()).cloned().expect("Unknown hash in lock file");
-        let (hash, next, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
-        blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true);
+        let (hash, next, _, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
+        blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true, false);
     }
     store_headers(&blocks_mutex_guard.blocks_id);
 }
@@ -81,13 +81,13 @@ pub fn load_headers_at_startup() {
     inject_pending_headers_from_previous_run_at_startup();
 }
 
-pub fn store_headers(headers: &Vec<(String, bool, bool)>) {
+pub fn store_headers(headers: &Vec<(String, bool, bool, bool)>) {
     let mut file = LineWriter::new(File::create(BLOCKS_TMP_FILE).unwrap());
     file.write_all(b"[\n").unwrap();
     for i in 1..headers.len() {
-        let (block, next, downloaded) = &headers[i];
+        let (block, next, downloaded, _) = &headers[i];
         if !downloaded || !next {
-            file.write_all(format!("\t {{\"elem\": \"{}\", \"next\": {}, \"downloaded\": {}}}", block, next, downloaded).as_ref()).unwrap();
+            file.write_all(format!("\t {{\"elem\": \"{}\", \"next\": {}, \"downloaded\": {}, \"donwloading\": false}}", block, next, downloaded).as_ref()).unwrap();
             if i < headers.len()-1 {
              file.write_all(b",\n").unwrap();
             } else {
