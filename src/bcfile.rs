@@ -101,7 +101,7 @@ pub fn store_headers(headers: &Vec<(String, bool, bool)>) {
     HEADERS_FROM_BLOCKS.lock().unwrap().set_len(0).unwrap();
 }
 
-pub fn store_block(blocks_id: &Vec<(String, bool, bool)>, block: &Block) {
+pub fn store_block(block: &Block) {
     let dir_path = format!("./{}/{}", BLOCKS_DIR, &block.hash[block.hash.len()-2..]);
     fs::create_dir_all(&dir_path).unwrap();
     let mut file = File::create(format!("{}/{}.json", dir_path, block.hash)).unwrap();
@@ -113,7 +113,8 @@ pub fn store_block(blocks_id: &Vec<(String, bool, bool)>, block: &Block) {
 
     if *&out.metadata().unwrap().len() > FLUSH_SIZE {
         drop(out);
-        store_headers(&blocks_id);
+        let blocks_id = &bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id;
+        store_headers(blocks_id);
     }
 }
 

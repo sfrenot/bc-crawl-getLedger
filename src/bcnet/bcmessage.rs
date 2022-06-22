@@ -163,23 +163,10 @@ pub fn build_request(message : &str) -> Vec<u8>{
     //     payload_bytes = bcblocks::get_getblock_message_payload();
     } else if message == *GET_HEADERS {
         payload_bytes = bcblocks::get_getheaders_message_payload();
-        //
-        // eprintln!("==> GET_HEADERS : {:02X?}", payload_bytes);
-        // std::process::exit(1);
     } else if message == *GET_DATA {
-        payload_bytes = bcblocks::get_getdata_message_payload();
+        payload_bytes = bcblocks::create_getdata_message_payload();
     }
-    /*
-    else if message.len() > GET_DATA.len() && &message[..GET_DATA.len()] == *GET_DATA {
 
-        payload_bytes = bcblocks::get_getdata_message_payload(&message[GET_DATA.len()+1..]);
-        message_name = &GET_DATA;
-        println!("Build for getData : {}", message_name);
-
-        // eprintln!("Build for getData : {:02x?}", payload_bytes);
-        // std::process::exit(1);
-    }
-    */
     // eprintln!("{} <-> {}", &message, &message_name);
 
     let mut header :Vec<u8> = vec![0; HEADER_SIZE];
@@ -187,10 +174,6 @@ pub fn build_request(message : &str) -> Vec<u8>{
     let mut request = vec![];
     request.extend(header);
     request.extend(payload_bytes);
-    //if message == *GET_DATA {
-    //  eprintln!("==> BEFORE SEND GET_DATA: {:02X?}", request);
-    //  std::process::exit(1);
-    //}
 
     return request;
 }
@@ -323,8 +306,11 @@ impl From<ParsingError> for ProcessBlockMessageError {
     }
 }
 
-pub fn process_block_message(blocks_mutex_guard: &mut MutexGuard<BlocksMutex>, payload: &Vec<u8>) -> Result<Block, ProcessBlockMessageError>{
+pub fn process_block_message(payload: &Vec<u8>) -> Result<Block, ProcessBlockMessageError>{
     let parsed = parse_block(payload)?;
+
+    let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
+
     let search_block = blocks_mutex_guard.known_blocks.get(&parsed.hash).cloned();
 
     match search_block {

@@ -31,7 +31,6 @@ fn main() {
     bcfile::open_logfile(LOG_FILE);
     bcfile::load_headers_at_startup();
     bcblocks::create_block_message_payload(&bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id);
-    bcblocks::create_getdata_message_payload(&bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id);
     eprintln!("Fin initialisation");
 
     // eprintln!("{}", hex::encode(bcblocks::get_getblock_message_payload()));

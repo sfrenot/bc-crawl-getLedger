@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use hex::FromHex;
 use crate::bcnet::bcmessage::{VERSION, VERSION_END};
 use std::collections::HashMap;
+use rand::Rng;
 
 #[derive(Debug, Clone)]
 pub struct BlockDesc {
@@ -19,7 +20,6 @@ pub struct BlocksMutex {
 lazy_static! {
     // static ref TEMPLATE_MESSAGE_PAYLOAD: Mutex<Vec<u8>> = Mutex::new(Vec::with_capacity(105));
     static ref TEMPLATE_GETBLOCK_PAYLOAD: Mutex<Vec<u8>> = Mutex::new(Vec::with_capacity(197));
-    static ref TEMPLATE_GETDATA_PAYLOAD: Mutex<Vec<u8>> = Mutex::new(Vec::with_capacity(37));
 
     pub static ref BLOCKS_MUTEX: Mutex<BlocksMutex> = {
         let mut m = Vec::with_capacity(5);
@@ -54,26 +54,32 @@ pub fn get_getdata_message_payload(search_block: &str) -> Vec<u8> {
 }
 */
 
-pub fn get_getdata_message_payload() -> Vec<u8> {
-    TEMPLATE_GETDATA_PAYLOAD.lock().unwrap().clone()
-}
+pub fn create_getdata_message_payload() -> Vec<u8>{
+    let blocks_id = &BLOCKS_MUTEX.lock().unwrap().blocks_id;
 
-pub fn create_getdata_message_payload(blocks_id: &Vec<(String, bool, bool)>) {
-    let mut block_message = TEMPLATE_GETDATA_PAYLOAD.lock().unwrap();
-    *block_message = Vec::with_capacity(37);
+    let mut block_message = Vec::with_capacity(37);
     block_message.extend([0x01]); // Number of Inventory vectors
     block_message.extend([0x02, 0x00, 0x00, 0x40]); // Type of inventory entry (2 = block) (40 for witness)
     let mut search_block:&str = "";
+
+    let mut rng = rand::thread_rng();
+    let mut idx = rng.gen_range(0..200);
+
     for i in 1..blocks_id.len() {
         let (bloc, _, downloaded) = &blocks_id[i];
-        if !downloaded {
+        if !downloaded && idx < 0{
+
             search_block = bloc;
             break;
         }
+        idx = idx-1;
     }
+    
     let mut block = Vec::from_hex(search_block).unwrap();
     block.reverse();
+    // eprintln!("new getdata -> {:02x?}", block);
     block_message.extend(block);
+    block_message.clone()
 }
 
 pub fn create_block_message_payload(blocks_id: &Vec<(String, bool, bool)>) {
