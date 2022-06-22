@@ -16,7 +16,7 @@ const BLOCKS_FILE: &str = "./blocks.json";
 const BLOCKS_TMP_FILE: &str = "./blocks.tmp.json";
 
 const BLOCKS_MARKS: usize  = 10000;
-const FLUSH_SIZE: u64 = 3200;
+// const FLUSH_SIZE: u64 = 3200;
 const UPDATED_BLOCKS_FROM_GETBLOCK : &str = "./blocks_to_update_from_getblocks.lst";
 
 lazy_static! {
@@ -111,11 +111,11 @@ pub fn store_block(block: &Block) {
     out.write_all(block.hash.as_bytes()).unwrap();
     out.write_all(b"\n").unwrap();
 
-    if *&out.metadata().unwrap().len() > FLUSH_SIZE {
-        drop(out);
-        let blocks_id = &bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id;
-        store_headers(blocks_id);
-    }
+    // if *&out.metadata().unwrap().len() > FLUSH_SIZE {
+    //     drop(out);
+    //     let blocks_id = &bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id;
+    //     store_headers(blocks_id);
+    // }
 }
 
 pub fn open_logfile(file_name :&str) {
