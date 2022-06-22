@@ -68,18 +68,18 @@ pub fn create_getdata_message_payload() -> Vec<u8>{
     for i in 1..blocks_id.len() {
         let (bloc, _, downloaded) = &blocks_id[i];
         if !downloaded && idx < 0{
-
             search_block = bloc;
             break;
         }
         idx = idx-1;
     }
-    
+
     let mut block = Vec::from_hex(search_block).unwrap();
     block.reverse();
     // eprintln!("new getdata -> {:02x?}", block);
+    // std::process:exit(1)
     block_message.extend(block);
-    block_message.clone()
+    block_message
 }
 
 pub fn create_block_message_payload(blocks_id: &Vec<(String, bool, bool)>) {
