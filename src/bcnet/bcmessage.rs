@@ -1,5 +1,4 @@
 use std::sync::Mutex;
-use std::sync::MutexGuard;
 use lazy_static::lazy_static;
 use std::time::SystemTime;
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -11,7 +10,6 @@ use std::convert::TryInto;
 use hex::{FromHex};
 use crate::bcblocks;
 use bitcoin_hashes::{sha256d, Hash};
-use crate::bcblocks::BlocksMutex;
 use crate::bcparse::{Block, parse_block, ParsingError};
 use crate::bcnet::bcmessage::ProcessBlockMessageError::Parsing;
 
@@ -265,10 +263,10 @@ pub enum ProcessHeadersMessageError {
     UnkownBlocks,
     NoNewBlocks
 }
-pub fn process_headers_message(blocks_mutex_guard: &mut MutexGuard<BlocksMutex>, payload: &Vec<u8>) -> Result<(), ProcessHeadersMessageError> {
+pub fn process_headers_message(payload: &Vec<u8>) -> Result<Vec<String>, ProcessHeadersMessageError> {
+    let mut new_blocks = vec![];
 
     let mut highest_index = 0;
-
     let (nb_headers, mut offset) = get_compact_int(&payload);
     let header_length = 80;
     for _i in 0..nb_headers {
@@ -277,11 +275,12 @@ pub fn process_headers_message(blocks_mutex_guard: &mut MutexGuard<BlocksMutex>,
         previous_block.reverse();
         let current_block = sha256d::Hash::hash(&payload[offset..offset+header_length]);
         // eprintln!("Gen -> {} --> {}", hex::encode(previous_block), current_block.to_string());
-        match bcblocks::is_new(blocks_mutex_guard, current_block.to_string(), hex::encode(previous_block)) {
+        match bcblocks::is_new(current_block.to_string(), hex::encode(previous_block)) {
             Ok(idx) if idx > highest_index => {
                 highest_index = idx;
+                new_blocks.push(current_block.to_string());
             },
-            Ok(_) => {},
+            Ok(_) => {new_blocks.push(current_block.to_string());},
             Err(()) => return Err(ProcessHeadersMessageError::UnkownBlocks)
         };
         offset+=header_length+1
@@ -289,7 +288,7 @@ pub fn process_headers_message(blocks_mutex_guard: &mut MutexGuard<BlocksMutex>,
 
     match highest_index {
         0 => Err(ProcessHeadersMessageError::NoNewBlocks),
-        _ => Ok(())
+        _ => Ok(new_blocks)
     }
 }
 

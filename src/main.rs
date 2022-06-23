@@ -30,8 +30,9 @@ fn main() {
     eprintln!("Début initialisation");
     bcfile::open_logfile(LOG_FILE);
     bcfile::load_headers_at_startup();
-    bcblocks::create_block_message_payload(&bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id);
+    bcblocks::create_block_message_payload();
     eprintln!("Fin initialisation");
+    // std::process::exit(1);
 
     // eprintln!("{}", hex::encode(bcblocks::get_getblock_message_payload()));
     // eprintln!("{}", hex::encode(bcblocks::get_getheaders_message_payload()));
@@ -39,7 +40,6 @@ fn main() {
 
     // eprintln!("{:?}", known_block);
     // eprintln!("{:?}", bcblocks::BLOCKS_ID.lock().unwrap());
-    // std::process::exit(1);
 
     let (address_channel_sender, address_channel_receiver) = mpsc::channel();
     let (connecting_start_channel_sender, connecting_start_channel_receiver) = chan::sync(MESSAGE_CHANNEL_SIZE);
@@ -70,11 +70,11 @@ fn check_pool_size(start_time: SystemTime ){
     loop {
         thread::sleep(CHECK_TERMINATION_TIMEOUT);
         let (total, other, done, failed) = bcpeers::get_peers_status();
-        let (hedrs, blocks) = bcfile::get_vols();
+        let (hedrs, new_hders, blocks) = bcfile::get_vols();
 
         eprintln!("Total: {} nodes\t -> TBD: {}, Done: {}, Fail: {}", total, other, done, failed);
         unsafe {
-            eprintln!("Volume / Speed\t\t -> Missing Headers : {},  Downloaded Blocks : {}/{}", hedrs,  blocks, (blocks-LAST_VOL_BLOCKS_DIR));
+            eprintln!("Volume / Speed\t\t -> Missing Headers : {},  Downloaded Blocks : {}/{}", (hedrs+new_hders),  blocks, (blocks-LAST_VOL_BLOCKS_DIR));
 
             LAST_VOL_BLOCKS_DIR = blocks;
         }

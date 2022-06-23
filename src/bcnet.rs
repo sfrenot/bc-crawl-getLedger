@@ -134,13 +134,14 @@ fn handle_incoming_cmd_msg_addr(payload: &Vec<u8>, sender: &Sender<String>) -> b
 }
 
 fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> bool {
-    let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
 
     // eprintln!("Status : {} -> {}", idx, block);
-    match bcmessage::process_headers_message(&mut blocks_mutex_guard, payload) {
-        Ok(()) => {
-            bcfile::store_headers(&blocks_mutex_guard.blocks_id);
-            bcblocks::create_block_message_payload(&blocks_mutex_guard.blocks_id);
+    match bcmessage::process_headers_message(payload) {
+        Ok(blocks) => {
+            // bcfile::store_headers(&bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id);
+            // eprintln!("-> {:?}", blocks);
+            bcfile::store_headers2(blocks);
+            bcblocks::create_block_message_payload();
             // eprintln!("new payload -> {:02x?}", hex::encode(&bcblocks::get_getheaders_message_payload()));
             // eprintln!("new payload");
             *lecture = 0;

@@ -1,5 +1,4 @@
 use std::sync::Mutex;
-use std::sync::MutexGuard;
 use lazy_static::lazy_static;
 use hex::FromHex;
 use crate::bcnet::bcmessage::{VERSION, VERSION_END};
@@ -78,7 +77,8 @@ pub fn create_getdata_message_payload() -> Vec<u8>{
     block_message
 }
 
-pub fn create_block_message_payload(blocks_id: &Vec<(String, bool, bool, bool)>) {
+pub fn create_block_message_payload() {
+    let blocks_id = &BLOCKS_MUTEX.lock().unwrap().blocks_id;
     let mut block_message = TEMPLATE_GETBLOCK_PAYLOAD.lock().unwrap();
     *block_message = Vec::with_capacity(block_message.len()+32);
     block_message.extend(VERSION.to_le_bytes());
@@ -100,7 +100,8 @@ pub fn create_block_message_payload(blocks_id: &Vec<(String, bool, bool, bool)>)
     // std::process::exit(1);
 }
 
-pub fn is_new(blocks_mutex_guard: &mut MutexGuard<BlocksMutex>, block: String, previous: String ) -> Result<usize, ()> {
+pub fn is_new(block: String, previous: String ) -> Result<usize, ()> {
+    let mut blocks_mutex_guard = BLOCKS_MUTEX.lock().unwrap();
 
     let search_block =  blocks_mutex_guard.known_blocks.get(&block).cloned();
     let search_previous = blocks_mutex_guard.known_blocks.get(&previous).cloned();
@@ -133,7 +134,6 @@ pub fn is_new(blocks_mutex_guard: &mut MutexGuard<BlocksMutex>, block: String, p
                     let idx = found_block.idx;
                     let val = BlockDesc{idx, previous: previous.clone()};
                     blocks_mutex_guard.known_blocks.insert(block.clone(), val);
-
                     blocks_mutex_guard.blocks_id.insert(idx, (previous.clone(), true, false, false));
                     eprintln!("Previous non {}, Block oui {}", &previous, &block);
 
