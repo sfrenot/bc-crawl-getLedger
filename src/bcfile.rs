@@ -10,6 +10,8 @@ use chrono::{DateTime, Utc};
 use crate::bcparse::Block;
 use fs_extra::dir::{DirOptions, get_dir_content2};
 use linecount::count_lines;
+use flate2::Compression;
+use flate2::GzBuilder;
 
 const BLOCKS_DIR: &str = "./blocks";
 const BLOCKS_FILE: &str = "./blocks.json";
@@ -149,10 +151,15 @@ pub fn store_headers2(headers: Vec<String>) {
 }
 
 pub fn store_block(block: &Block) {
+    // eprintln!("Storing {}",block.hash);
     let dir_path = format!("./{}/{}", BLOCKS_DIR, &block.hash[block.hash.len()-2..]);
     fs::create_dir_all(&dir_path).unwrap();
-    let mut file = File::create(format!("{}/{}.json", dir_path, block.hash)).unwrap();
-    file.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
+
+    let file = File::create(format!("{}/{}.json.gz", dir_path, block.hash)).unwrap();
+    let mut gz = GzBuilder::new()
+                .write(file, Compression::default());
+    gz.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
+    gz.finish().unwrap();
 
     let mut out = HEADERS_FROM_DOWNLOADEDBLOCKS.lock().unwrap();
     out.write_all(block.hash.as_bytes()).unwrap();
