@@ -15,11 +15,10 @@ use std::sync::atomic::Ordering;
 use std::thread;
 use std::process;
 
-use time::PreciseTime;
 use std::time::{Duration, SystemTime};
 
 const CHECK_TERMINATION_TIMEOUT:Duration = Duration::from_secs(5);
-const THREADS: u8 = 20;
+const THREADS: u8 = 16;
 const MESSAGE_CHANNEL_SIZE: usize = 100000;
 const DNS_START: &str = "seed.btc.petertodd.org";
 const PORT_START: &str = "8333";
@@ -30,7 +29,7 @@ pub static mut LAST_VOL_HEADERS: usize = 0;
 
 
 fn main() {
-    eprintln!("Début initialisation");
+    eprintln!("Début initialisation {} threads", THREADS);
     bcfile::open_logfile(LOG_FILE);
     bcfile::load_headers_at_startup();
     bcblocks::create_block_message_payload();
@@ -71,15 +70,15 @@ fn main() {
 
 fn check_pool_size(start_time: SystemTime ){
     loop {
-        let start = PreciseTime::now();
+        let now = SystemTime::now();
         thread::sleep(CHECK_TERMINATION_TIMEOUT);
         let (total, other, done, failed) = bcpeers::get_peers_status();
         let (hedrs, new_hders, blocks) = bcfile::get_vols();
+        let duree = now.elapsed().unwrap().as_secs();
 
         eprintln!("Total: {} nodes\t -> TBD: {}, Done: {}, Fail: {}", total, other, done, failed);
         unsafe {
-            eprintln!("Volume / Speed\t\t -> Missing Headers : {}/{},  Downloaded Blocks : {}/{}", (hedrs+new_hders), hedrs+new_hders-LAST_VOL_HEADERS, blocks, (blocks-LAST_VOL_BLOCKS_DIR));
-
+            eprintln!("{}s Volume / Speed\t\t -> Missing Headers : {}-{}/s,  Downloaded Blocks : {}-{}/s", duree, (hedrs+new_hders), (hedrs+new_hders-LAST_VOL_HEADERS)/duree as usize, blocks, (blocks-LAST_VOL_BLOCKS_DIR)/duree as usize);
             LAST_VOL_HEADERS = hedrs+new_hders;
             LAST_VOL_BLOCKS_DIR = blocks;
         }
@@ -89,7 +88,5 @@ fn check_pool_size(start_time: SystemTime ){
             println!("POOL Crawling ends in {:?} ", time_spent);
             process::exit(0);
         }
-        let end = PreciseTime::now();
-        println!("{} s", start.to(end));
     }
 }

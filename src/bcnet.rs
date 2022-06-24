@@ -6,6 +6,7 @@ use std::sync::atomic::Ordering;
 use std::io::Write;
 use std::io::Error;
 use std::io::ErrorKind;
+// use pad::{PadStr, Alignment};
 
 use std::net::{SocketAddr, TcpStream};
 use chan::Receiver;
@@ -17,11 +18,12 @@ use crate::bcblocks as bcblocks;
 use crate::bcpeers as bcpeers;
 
 const CONNECTION_TIMEOUT:Duration = Duration::from_secs(10);
-const MESSAGE_TIMEOUT:Duration = Duration::from_secs(120);
+const MESSAGE_TIMEOUT:Duration = Duration::from_secs(20);
 const MIN_ADDRESSES_RECEIVED_THRESHOLD: usize = 5;
-const NB_MAX_READ_ON_SOCKET:usize = 300;
+const NB_MAX_READ_ON_SOCKET:usize = 20;
 
-static mut NODES_STATUS:[u8; crate::THREADS as usize]= [0; crate::THREADS as usize];
+// Debugger
+// static mut NODES_STATUS:[([u8; 15], u8, u8, u8, u8, u8); crate::THREADS as usize]= [([0; 15], 0, 0, 0, 0, 0); crate::THREADS as usize];
 
 pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, num: u8){
     loop{ //Node Management
@@ -64,11 +66,11 @@ fn handle_incoming_message<'a>(_num: &u8, connection:& TcpStream, sender: &Sende
     connection.set_read_timeout(Some(MESSAGE_TIMEOUT)).unwrap();
     let mut lecture:usize = 0; // Garde pour éviter connection infinie inutile
     loop {
+
         // println!("Lecture de {} thread {}", target_address, num);
         match bcmessage::read_message(&connection) {
             Err(_error) => return &CONN_CLOSE,
             Ok((command, payload)) => {
-                lecture+=1;
                 //eprintln!("Command From : {} --> {}, payload : {}", &target_address, &command, payload.len());
                 // if payload.len() <= 0 { panic!("Payload nul");}
                 match command {
@@ -94,6 +96,7 @@ fn handle_incoming_message<'a>(_num: &u8, connection:& TcpStream, sender: &Sende
                 };
             }
         };
+        lecture+=1;
         if lecture > NB_MAX_READ_ON_SOCKET {
             eprintln!("Sortie du noeud : trop de lectures inutiles");
             return &CONN_CLOSE;
@@ -115,13 +118,27 @@ fn next_status(from: &String) -> &String {
 }
 
 fn activate_peer<'a>(num: &u8, mut connection: &TcpStream, current: &'a String, sender: &Sender<String>, target: &String) -> Result<&'a String, Error> {
-    if current == "getdata" {
-        unsafe {
-            NODES_STATUS[*num as usize] = NODES_STATUS[*num as usize]+1;
-            eprintln!("{} -> {} -> {:?}", current, target, NODES_STATUS);
-        }
-    }
-    connection.write(bcmessage::build_request(current).as_slice())?;
+    // // Trace function
+    // unsafe {
+    //     let (mut node, run, mut ver, mut addr, mut head, mut data) = NODES_STATUS[*num as usize];
+    //     match current {
+    //         current if current == "version" => ver += 1,
+    //         current if current == "getaddr" => addr += 1,
+    //         current if current == "getheaders" => head += 1,
+    //         current if current == "getdata" => data += 1,
+    //         _ => ()
+    //     };
+    //
+    //     node.copy_from_slice(&target.pad_to_width_with_alignment(20, Alignment::Right).as_bytes()[0..15]);
+    //
+    //     NODES_STATUS[*num as usize] = (node, run+1, ver, addr, head, data);
+    //     for (a, b, c, d, e, f) in NODES_STATUS {
+    //         eprint!("({}/{},{},{},{},{})", String::from_utf8_lossy(&a).trim(), b, c, d, e, f);
+    //     }
+    //     eprintln!("");
+    // }
+
+    connection.write(bcmessage::build_request(current).as_slice()).unwrap();
 
     match handle_incoming_message(num, connection, sender, target) {
         res if *res == *CONN_CLOSE => Err(Error::new(ErrorKind::Other, format!("Connexion terminée {} <> {}", current, res))),
