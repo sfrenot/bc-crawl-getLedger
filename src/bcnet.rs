@@ -105,7 +105,7 @@ fn next_status(from: &String) -> &String {
     match from {
         elem if *elem == *MSG_VERSION => {&MSG_VERSION_ACK},
         elem if *elem == *MSG_VERSION_ACK => {&MSG_GETADDR},
-        elem if *elem == *MSG_GETADDR => {&GET_HEADERS},
+        elem if *elem == *MSG_GETADDR => {&GET_DATA},
         elem if *elem == *GET_HEADERS => {&GET_DATA},
         elem if *elem == *GET_DATA => {&GET_DATA},
         _ => {&CONN_CLOSE}
@@ -113,12 +113,13 @@ fn next_status(from: &String) -> &String {
 }
 
 fn activate_peer<'a>(mut connection: &TcpStream, current: &'a String, sender: &Sender<String>, target: &String) -> Result<&'a String, Error> {
+    // eprintln!("{} -> {}", current, target);
     connection.write(bcmessage::build_request(current).as_slice())?;
 
     match handle_incoming_message(connection, sender, target) {
         res if *res == *CONN_CLOSE => Err(Error::new(ErrorKind::Other, format!("Connexion terminée {} <> {}", current, res))),
         res if *res == *current => Ok(next_status(current)),
-        res if *res == *MSG_GETADDR && *current == *GET_HEADERS => Ok(current), // Remote node answers many times the same thing
+        // res if *res == *MSG_GETADDR && *current == *GET_HEADERS => Ok(current), // Remote node answers many times the same thing
         res => Err(Error::new(ErrorKind::ConnectionReset, format!("Wrong message {} <> {}", current, res)))
     }
 }
