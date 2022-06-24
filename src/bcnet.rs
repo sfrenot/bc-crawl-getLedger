@@ -21,7 +21,7 @@ const MESSAGE_TIMEOUT:Duration = Duration::from_secs(120);
 const MIN_ADDRESSES_RECEIVED_THRESHOLD: usize = 5;
 const NB_MAX_READ_ON_SOCKET:usize = 300;
 
-static mut NODES_STATUS:[u8; 30]= [0; 30];
+static mut NODES_STATUS:[u8; crate::THREADS as usize]= [0; crate::THREADS as usize];
 
 pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, num: u8){
     loop{ //Node Management

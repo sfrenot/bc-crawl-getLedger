@@ -30,7 +30,6 @@ lazy_static! {
     // pub static ref SORTIE:LineWriter<File> = LineWriter::new(File::create(UPDATED_BLOCKS_FROM_GETBLOCK).unwrap());
     pub static ref HEADERS_FROM_DOWNLOADEDBLOCKS: Mutex<File> = Mutex::new(File::options().append(true).create(true).open(UPDATED_BLOCKS_FROM_GETBLOCK).unwrap());
     pub static ref HEADERS_FROM_GETHEADERS: Mutex<File> = Mutex::new(File::options().append(true).create(true).open(UPDATED_BLOCKS_FROM_GETHEADERS).unwrap());
-
 }
 
 #[derive(Debug, Deserialize)]
