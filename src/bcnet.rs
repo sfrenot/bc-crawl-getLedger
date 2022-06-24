@@ -21,7 +21,9 @@ const MESSAGE_TIMEOUT:Duration = Duration::from_secs(120);
 const MIN_ADDRESSES_RECEIVED_THRESHOLD: usize = 5;
 const NB_MAX_READ_ON_SOCKET:usize = 300;
 
-pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, _num: u64){
+static mut NODES_STATUS:[u8; 30]= [0; 30];
+
+pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, num: u8){
     loop{ //Node Management
         let target_address = connection_start_channel.recv().unwrap();
         let mut status: &String = &MSG_VERSION; // Start from this status
@@ -33,7 +35,7 @@ pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_chann
             Ok(connection) => {
                 loop {
                    // eprintln!("Avant Activation {}, {}", target_address.clone(), status);
-                   status = match activate_peer(&connection, &status, &address_channel_tx, &target_address) {
+                   status = match activate_peer(&num, &connection, &status, &address_channel_tx, &target_address) {
                        Err(e) => {
                            match e.kind() {
                                ErrorKind::Other => {
@@ -58,11 +60,11 @@ pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_chann
     }
 }
 
-fn handle_incoming_message<'a>(connection:& TcpStream, sender: &Sender<String>, target_address: &String) -> &'a String  {
+fn handle_incoming_message<'a>(_num: &u8, connection:& TcpStream, sender: &Sender<String>, target_address: &String) -> &'a String  {
     connection.set_read_timeout(Some(MESSAGE_TIMEOUT)).unwrap();
     let mut lecture:usize = 0; // Garde pour éviter connection infinie inutile
     loop {
-        // println!("Lecture de {}", target_address);
+        // println!("Lecture de {} thread {}", target_address, num);
         match bcmessage::read_message(&connection) {
             Err(_error) => return &CONN_CLOSE,
             Ok((command, payload)) => {
@@ -112,11 +114,16 @@ fn next_status(from: &String) -> &String {
     }
 }
 
-fn activate_peer<'a>(mut connection: &TcpStream, current: &'a String, sender: &Sender<String>, target: &String) -> Result<&'a String, Error> {
-    // eprintln!("{} -> {}", current, target);
+fn activate_peer<'a>(num: &u8, mut connection: &TcpStream, current: &'a String, sender: &Sender<String>, target: &String) -> Result<&'a String, Error> {
+    if current == "getdata" {
+        unsafe {
+            NODES_STATUS[*num as usize] = NODES_STATUS[*num as usize]+1;
+            eprintln!("{} -> {} -> {:?}", current, target, NODES_STATUS);
+        }
+    }
     connection.write(bcmessage::build_request(current).as_slice())?;
 
-    match handle_incoming_message(connection, sender, target) {
+    match handle_incoming_message(num, connection, sender, target) {
         res if *res == *CONN_CLOSE => Err(Error::new(ErrorKind::Other, format!("Connexion terminée {} <> {}", current, res))),
         res if *res == *current => Ok(next_status(current)),
         // res if *res == *MSG_GETADDR && *current == *GET_HEADERS => Ok(current), // Remote node answers many times the same thing

@@ -19,7 +19,7 @@ use time::PreciseTime;
 use std::time::{Duration, SystemTime};
 
 const CHECK_TERMINATION_TIMEOUT:Duration = Duration::from_secs(5);
-const THREADS: u64 = 20;
+const THREADS: u8 = 20;
 const MESSAGE_CHANNEL_SIZE: usize = 100000;
 const DNS_START: &str = "seed.btc.petertodd.org";
 const PORT_START: &str = "8333";
