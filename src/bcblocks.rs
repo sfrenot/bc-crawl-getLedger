@@ -32,12 +32,8 @@ lazy_static! {
     };
 }
 
-pub fn get_getblock_message_payload() -> Vec<u8> {
-    TEMPLATE_GETBLOCK_PAYLOAD.lock().unwrap().clone()
-}
-
 pub fn get_getheaders_message_payload() -> Vec<u8> {
-    get_getblock_message_payload()
+    TEMPLATE_GETBLOCK_PAYLOAD.lock().unwrap().clone()
 }
 
 /*
@@ -82,19 +78,20 @@ pub fn create_block_message_payload() {
     let mut block_message = TEMPLATE_GETBLOCK_PAYLOAD.lock().unwrap();
     *block_message = Vec::with_capacity(block_message.len()+32);
     block_message.extend(VERSION.to_le_bytes());
-    block_message.extend([blocks_id.len() as u8-1]); // Fake value replaced later
-    let size = blocks_id.len()-1;
-    let mut nb = 0;
-    for i in 0..blocks_id.len() {
-        let (bloc, next, _, _) = &blocks_id[size-i];
-        if !next {
-            let mut val = Vec::from_hex(bloc).unwrap();
-            val.reverse();
-            block_message.extend(val);
-            nb+=1;
-        }
-    }
-    block_message[VERSION_END] = nb-1; //Vector size
+    block_message.extend([blocks_id.len() as u8-1]);
+
+    let (lastbloc, _, _, _) = blocks_id.last().unwrap();
+    let mut val = Vec::from_hex(lastbloc).unwrap();
+    val.reverse();
+    block_message.extend(val);
+
+    let (firstbloc, _, _, _) = &blocks_id[0];
+    let val = Vec::from_hex(firstbloc).unwrap();
+    block_message.extend(val);
+
+    block_message[VERSION_END] = 1;
+
+
     // drop(block_message);
     // eprintln!("{}",hex::encode(&get_getheaders_message_payload()));
     // std::process::exit(1);

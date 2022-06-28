@@ -54,8 +54,7 @@ const TIMESTAMP_END:usize= 20;
 
 // payload struct
 lazy_static! {
-    // static ref TEMPLATE_MESSAGE_PAYLOAD: Mutex<Vec<u8>> = Mutex::new(Vec::with_capacity(105));
-    static ref TEMPLATE_MESSAGE_PAYLOAD: Mutex<Vec<u8>> = Mutex::new(create_init_message_payload());
+    static ref TEMPLATE_MESSAGE_PAYLOAD: Vec<u8> = create_init_message_payload();
 
     pub static ref MSG_VERSION:String = String::from("version");
     pub static ref MSG_VERSION_ACK:String = String::from("verack");
@@ -65,7 +64,7 @@ lazy_static! {
     pub static ref CONN_CLOSE:String = String::from("CONNCLOSED");
     pub static ref GET_HEADERS:String = String::from("getheaders");
     pub static ref HEADERS:String = String::from("headers");
-    pub static ref GET_BLOCKS:String = String::from("getblocks");
+    // pub static ref GET_BLOCKS:String = String::from("getblocks");
     pub static ref GET_DATA:String = String::from("getdata");
     pub static ref BLOCK:String = String::from("block");
 }
@@ -153,22 +152,18 @@ pub fn read_message(mut connection: &TcpStream) -> Result<(String, Vec<u8>), Err
 
 pub fn build_request(message : &str) -> Vec<u8>{
     let mut payload_bytes: Vec<u8> = Vec::new();
-    let message_name = message;
+    // eprintln!("->MSG_VERSION : {:02X?}", payload_bytes);
+
     if message == *MSG_VERSION {
         payload_bytes = get_payload_with_current_date();
-        // eprintln!("->MSG_VERSION : {:02X?}", payload_bytes);
-    // } else if message == GET_BLOCKS {
-    //     payload_bytes = bcblocks::get_getblock_message_payload();
     } else if message == *GET_HEADERS {
         payload_bytes = bcblocks::get_getheaders_message_payload();
     } else if message == *GET_DATA {
         payload_bytes = bcblocks::create_getdata_message_payload();
     }
 
-    // eprintln!("{} <-> {}", &message, &message_name);
-
     let mut header :Vec<u8> = vec![0; HEADER_SIZE];
-    build_request_message_header(& mut header, message_name, &payload_bytes);
+    build_request_message_header(& mut header, message, &payload_bytes);
     let mut request = vec![];
     request.extend(header);
     request.extend(payload_bytes);
@@ -177,7 +172,7 @@ pub fn build_request(message : &str) -> Vec<u8>{
 }
 
 fn get_payload_with_current_date() -> Vec<u8> {
-    let mut payload :Vec<u8>  = TEMPLATE_MESSAGE_PAYLOAD.lock().unwrap().clone();
+    let mut payload :Vec<u8>  = TEMPLATE_MESSAGE_PAYLOAD.clone();
     let mut date :Vec<u8> = Vec::new();
     let unix_timestamp:u64 = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
     date.extend(unix_timestamp.swap_bytes().to_be_bytes());
