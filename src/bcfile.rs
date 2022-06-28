@@ -107,7 +107,8 @@ fn inject_downloaded_headers_from_previous_run_at_startup() {
     let reader = BufReader::new(OpenOptions::new().append(true).read(true).create(true).open(Path::new(UPDATED_BLOCKS_FROM_GETBLOCK)).unwrap());
 
     for line in reader.lines() {
-        let block = blocks_mutex_guard.known_blocks.get(&line.unwrap()).cloned().expect("Unknown hash in lock file");
+        let l = line.unwrap();
+        let block = blocks_mutex_guard.known_blocks.get(&l).cloned().expect(&format!("Unknown hash in lock file : {}", &l));
         let (hash, next, _, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
         blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true, false);
     }
@@ -121,7 +122,7 @@ pub fn load_headers_at_startup() {
     inject_downloaded_headers_from_previous_run_at_startup();
 }
 
-pub fn store_headers(headers: &Vec<(String, bool, bool, bool)>) {
+fn store_headers(headers: &Vec<(String, bool, bool, bool)>) {
     let mut file = LineWriter::new(File::create(BLOCKS_TMP_FILE).unwrap());
     file.write_all(b"[\n").unwrap();
     let mut idx = 0;
@@ -151,10 +152,10 @@ pub fn store_headers2(headers: Vec<String>) {
 
 pub fn store_block(block: &Block) {
     // eprintln!("Storing {}",block.hash);
-    let dir_path = format!("./{}/{}", BLOCKS_DIR, &block.hash[block.hash.len()-2..]);
+    let dir_path = format!("./{}/{}", BLOCKS_DIR, &block.hash[block.hash.len()-3..]);
     fs::create_dir_all(&dir_path).unwrap();
 
-    let file = File::create(format!("{}/{}.json.gz", dir_path, block.hash)).unwrap();
+    let file = File::create(format!("{}/{}.json.gz", dir_path, &block.hash[..block.hash.len()-3])).unwrap();
     let mut gz = GzBuilder::new()
                 .write(file, Compression::default());
     gz.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
@@ -164,11 +165,6 @@ pub fn store_block(block: &Block) {
     out.write_all(block.hash.as_bytes()).unwrap();
     out.write_all(b"\n").unwrap();
 
-    // if *&out.metadata().unwrap().len() > FLUSH_SIZE {
-    //     drop(out);
-    //     let blocks_id = &bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id;
-    //     store_headers(blocks_id);
-    // }
 }
 
 pub fn open_logfile(file_name :&str) {

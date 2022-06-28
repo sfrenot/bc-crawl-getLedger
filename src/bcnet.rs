@@ -23,7 +23,7 @@ const MIN_ADDRESSES_RECEIVED_THRESHOLD: usize = 5;
 const NB_MAX_READ_ON_SOCKET:usize = 20;
 
 // Debugger
-// static mut NODES_STATUS:[([u8; 15], u8, u8, u8, u8, u8); crate::THREADS as usize]= [([0; 15], 0, 0, 0, 0, 0); crate::THREADS as usize];
+// static mut NODES_STATUS:[([u8; 15], u64, u64, u64, u64, u64); crate::THREADS as usize]= [([0; 15], 0, 0, 0, 0, 0); crate::THREADS as usize];
 
 pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, num: u8){
     loop{ //Node Management
@@ -110,33 +110,37 @@ fn next_status(from: &String) -> &String {
     match from {
         elem if *elem == *MSG_VERSION => {&MSG_VERSION_ACK},
         elem if *elem == *MSG_VERSION_ACK => {&MSG_GETADDR},
-        elem if *elem == *MSG_GETADDR => {&GET_DATA},
+        elem if *elem == *MSG_GETADDR => {&GET_HEADERS},
         elem if *elem == *GET_HEADERS => {&GET_DATA},
         elem if *elem == *GET_DATA => {&GET_DATA},
         _ => {&CONN_CLOSE}
     }
 }
 
+// fn trace(num: &u8, target: &String, current: &String) {
+//     unsafe {
+//         let (mut node, run, mut ver, mut addr, mut head, mut data) = NODES_STATUS[*num as usize];
+//         match current {
+//             current if current == "version" => ver += 1,
+//             current if current == "getaddr" => addr += 1,
+//             current if current == "getheaders" => head += 1,
+//             current if current == "getdata" => data += 1,
+//             _ => ()
+//         };
+//
+//         node.copy_from_slice(&target.pad_to_width_with_alignment(20, Alignment::Right).as_bytes()[0..15]);
+//
+//         NODES_STATUS[*num as usize] = (node, run+1, ver, addr, head, data);
+//         for (a, b, c, d, e, f) in NODES_STATUS {
+//             eprint!("{} -> ({}/{},{},{},{},{})", &num, String::from_utf8_lossy(&a).trim(), b, c, d, e, f);
+//         }
+//         eprintln!("");
+//     }
+// }
+
 fn activate_peer<'a>(num: &u8, mut connection: &TcpStream, current: &'a String, sender: &Sender<String>, target: &String) -> Result<&'a String, Error> {
     // // Trace function
-    // unsafe {
-    //     let (mut node, run, mut ver, mut addr, mut head, mut data) = NODES_STATUS[*num as usize];
-    //     match current {
-    //         current if current == "version" => ver += 1,
-    //         current if current == "getaddr" => addr += 1,
-    //         current if current == "getheaders" => head += 1,
-    //         current if current == "getdata" => data += 1,
-    //         _ => ()
-    //     };
-    //
-    //     node.copy_from_slice(&target.pad_to_width_with_alignment(20, Alignment::Right).as_bytes()[0..15]);
-    //
-    //     NODES_STATUS[*num as usize] = (node, run+1, ver, addr, head, data);
-    //     for (a, b, c, d, e, f) in NODES_STATUS {
-    //         eprint!("({}/{},{},{},{},{})", String::from_utf8_lossy(&a).trim(), b, c, d, e, f);
-    //     }
-    //     eprintln!("");
-    // }
+    // trace(&num, &target, &current);
 
     connection.write(bcmessage::build_request(current).as_slice()).unwrap();
 
@@ -163,7 +167,6 @@ fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> boo
     // eprintln!("Status : {} -> {}", idx, block);
     match bcmessage::process_headers_message(payload) {
         Ok(blocks) => {
-            // bcfile::store_headers(&bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id);
             // eprintln!("-> {:?}", blocks);
             bcfile::store_headers2(blocks);
             bcblocks::create_block_message_payload();

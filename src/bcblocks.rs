@@ -53,13 +53,13 @@ pub fn get_getdata_message_payload(search_block: &str) -> Vec<u8> {
 */
 
 pub fn create_getdata_message_payload() -> Vec<u8>{
-    let blocks_id = &mut BLOCKS_MUTEX.lock().unwrap().blocks_id;
 
     let mut block_message = Vec::with_capacity(37);
     block_message.extend([0x01]); // Number of Inventory vectors
     block_message.extend([0x02, 0x00, 0x00, 0x40]); // Type of inventory entry (2 = block) (40 for witness)
     let mut search_block = "".to_owned();
 
+    let blocks_id = &mut BLOCKS_MUTEX.lock().unwrap().blocks_id;
     for i in 1..blocks_id.len() {
         let (bloc, prev, downloaded, downloading) = blocks_id[i].clone();
         if !(downloaded) && !(downloading) {

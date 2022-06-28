@@ -154,7 +154,7 @@ pub fn read_message(mut connection: &TcpStream) -> Result<(String, Vec<u8>), Err
 pub fn build_request(message : &str) -> Vec<u8>{
     let mut payload_bytes: Vec<u8> = Vec::new();
     let message_name = message;
-    if message == MSG_VERSION.to_string() {
+    if message == *MSG_VERSION {
         payload_bytes = get_payload_with_current_date();
         // eprintln!("->MSG_VERSION : {:02X?}", payload_bytes);
     // } else if message == GET_BLOCKS {
