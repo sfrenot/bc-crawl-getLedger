@@ -4,6 +4,7 @@ mod bcfile;
 mod bcnet;
 mod bcpeers;
 mod bcparse;
+mod bcscript;
 
 use trust_dns_resolver::Resolver;
 use trust_dns_resolver::config::ResolverConfig;
@@ -16,7 +17,6 @@ use std::thread;
 use std::process;
 
 use std::time::{Duration, SystemTime};
-
 const CHECK_TERMINATION_TIMEOUT:Duration = Duration::from_secs(5);
 const THREADS: u8 = 16;
 const MESSAGE_CHANNEL_SIZE: usize = 100000;
@@ -29,6 +29,8 @@ pub static mut LAST_VOL_HEADERS: usize = 0;
 
 
 fn main() {
+    bcscript::main();
+
     eprintln!("Début initialisation {} threads", THREADS);
     bcfile::open_logfile(LOG_FILE);
     bcfile::load_headers_at_startup();
