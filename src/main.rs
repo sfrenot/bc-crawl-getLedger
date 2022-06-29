@@ -5,6 +5,7 @@ mod bcnet;
 mod bcpeers;
 mod bcparse;
 mod bcscript;
+mod bcutils;
 
 use trust_dns_resolver::Resolver;
 use trust_dns_resolver::config::ResolverConfig;
