@@ -12,6 +12,7 @@ use fs_extra::dir::get_dir_content;
 use linecount::count_lines;
 use flate2::Compression;
 use flate2::GzBuilder;
+use std::sync::mpsc::Receiver;
 
 const BLOCKS_DIR: &str = "./blocks";
 const BLOCKS_FILE: &str = "./blocks.json";
@@ -159,21 +160,25 @@ pub fn store_headers2(headers: Vec<String>) {
     }
 }
 
-pub fn store_block(block: &Block) {
-    // eprintln!("Storing {}",block.hash);
-    let dir_path = format!("./{}/{}", BLOCKS_DIR, &block.hash[block.hash.len()-3..]);
-    fs::create_dir_all(&dir_path).unwrap();
+pub fn store_block(block_channel: Receiver<Block>) {
+    loop {
+        let block = block_channel.recv().unwrap();
 
-    let file = File::create(format!("{}/{}.json.gz", dir_path, &block.hash[..block.hash.len()-3])).unwrap();
-    let mut gz = GzBuilder::new()
-                .write(file, Compression::default());
-    gz.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
-    // gz.write_all(&format!("{:?}", block).as_bytes()[6..]).unwrap();
-    gz.finish().unwrap();
+        // eprintln!("Storing {}",block.hash);
+        let dir_path = format!("./{}/{}", BLOCKS_DIR, &block.hash[block.hash.len()-3..]);
+        fs::create_dir_all(&dir_path).unwrap();
 
-    let mut out = HEADERS_FROM_DOWNLOADEDBLOCKS.lock().unwrap();
-    out.write_all(block.hash.as_bytes()).unwrap();
-    out.write_all(b"\n").unwrap();
+        let file = File::create(format!("{}/{}.json.gz", dir_path, &block.hash[..block.hash.len()-3])).unwrap();
+        let mut gz = GzBuilder::new()
+                    .write(file, Compression::default());
+        gz.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
+        // gz.write_all(&format!("{:?}", block).as_bytes()[6..]).unwrap();
+        gz.finish().unwrap();
+
+        let mut out = HEADERS_FROM_DOWNLOADEDBLOCKS.lock().unwrap();
+        out.write_all(block.hash.as_bytes()).unwrap();
+        out.write_all(b"\n").unwrap();
+    }
 
 }
 

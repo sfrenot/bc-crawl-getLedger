@@ -7,6 +7,7 @@ use std::io::Write;
 use std::io::Error;
 use std::io::ErrorKind;
 use pad::{PadStr, Alignment};
+use crate::bcparse::Block;
 
 use std::net::{SocketAddr, TcpStream};
 use chan::Receiver;
@@ -25,7 +26,7 @@ const NB_MAX_READ_ON_SOCKET:usize = 20;
 // Debugger
 static mut NODES_STATUS:[([u8; 15], u64, u64, u64, u64, u64); crate::THREADS as usize]= [([0; 15], 0, 0, 0, 0, 0); crate::THREADS as usize];
 
-pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, num: u8){
+pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, block_sender: Sender<Block>, num: u8){
     loop{ //Node Management
         let target_address = connection_start_channel.recv().unwrap();
         let mut status: &String = &MSG_VERSION; // Start from this status
@@ -38,7 +39,7 @@ pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_chann
                 // connection.set_read_timeout(Some(READ_MESSAGE_TIMEOUT)).unwrap();
                 loop {
                    // eprintln!("Avant Activation {}, {}", target_address.clone(), status);
-                   status = match activate_peer(&num, &connection, &status, &address_channel_tx, &target_address) {
+                   status = match activate_peer(&num, &connection, &status, &address_channel_tx, &block_sender, &target_address) {
                        Err(e) => {
                            match e.kind() {
                                ErrorKind::Other => {
@@ -63,7 +64,7 @@ pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_chann
     }
 }
 
-fn handle_incoming_message<'a>(_num: &u8, connection:& TcpStream, sender: &Sender<String>, target_address: &String) -> &'a String  {
+fn handle_incoming_message<'a>(_num: &u8, connection:& TcpStream, sender: &Sender<String>, block_sender: &Sender<Block>, target_address: &String) -> &'a String  {
     let mut lecture:usize = 0; // Garde pour éviter connection infinie inutile
     loop {
 
@@ -88,7 +89,7 @@ fn handle_incoming_message<'a>(_num: &u8, connection:& TcpStream, sender: &Sende
                             false => &CONN_CLOSE
                         },
                     cmd if cmd == *BLOCK
-                        => return match handle_incoming_cmd_msg_block(&payload, &mut lecture) {
+                        => return match handle_incoming_cmd_msg_block(&payload, &mut lecture, &block_sender) {
                         true => &GET_DATA,
                         false => &CONN_CLOSE
                     },
@@ -139,13 +140,13 @@ fn trace(num: &u8, target: &String, current: &String) {
     }
 }
 
-fn activate_peer<'a>(num: &u8, mut connection: &TcpStream, current: &'a String, sender: &Sender<String>, target: &String) -> Result<&'a String, Error> {
+fn activate_peer<'a>(num: &u8, mut connection: &TcpStream, current: &'a String, sender: &Sender<String>, block_sender: &Sender<Block>, target: &String) -> Result<&'a String, Error> {
     // // Trace function
     // trace(&num, &target, &current);
 
     connection.write(bcmessage::build_request(current).as_slice()).unwrap();
 
-    match handle_incoming_message(num, connection, sender, target) {
+    match handle_incoming_message(num, connection, sender, block_sender, target) {
         res if *res == *CONN_CLOSE => Err(Error::new(ErrorKind::Other, format!("Connexion terminée {} <> {}", current, res))),
         res if *res == *current => Ok(next_status(current)),
         // res if *res == *MSG_GETADDR && *current == *GET_HEADERS => Ok(current), // Remote node answers many times the same thing
@@ -192,11 +193,12 @@ fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> boo
     }
 }
 
-fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize) -> bool {
+fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize, block_sender: &Sender<Block>) -> bool {
 
     match bcmessage::process_block_message(payload) {
         Ok(block) => {
-            bcfile::store_block(&block);
+            block_sender.send(block);
+            // bcfile::store_block(&block);
             *lecture = 0;
             // eprintln!("new block stored");
             true

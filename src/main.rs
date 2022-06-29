@@ -19,7 +19,7 @@ use std::process;
 
 use std::time::{Duration, SystemTime};
 const CHECK_TERMINATION_TIMEOUT:Duration = Duration::from_secs(5);
-const THREADS: u8 = 5;
+const THREADS: u8 = 20;
 const MESSAGE_CHANNEL_SIZE: usize = 100000;
 const DNS_START: &str = "seed.btc.petertodd.org";
 const PORT_START: &str = "8333";
@@ -44,15 +44,19 @@ fn main() {
     // eprintln!("{:?}", bcblocks::BLOCKS_ID.lock().unwrap());
 
     let (address_channel_sender, address_channel_receiver) = mpsc::channel();
+    let (block_sender, block_receiver) = mpsc::channel();
+
     let (connecting_start_channel_sender, connecting_start_channel_receiver) = chan::sync(MESSAGE_CHANNEL_SIZE);
 
     eprintln!("Début initialisation {} threads", THREADS);
-    thread::spawn(move || { check_pool_size(SystemTime::now()); });
+    thread::spawn(move || { check_pool_size(SystemTime::now());});
+    thread::spawn(move || { bcfile::store_block(block_receiver);});
 
     for i in 0..THREADS {
         let sender = address_channel_sender.clone();
+        let block_sender = block_sender.clone();
         let recv = connecting_start_channel_receiver.clone();
-        thread::spawn(move || { bcnet::handle_one_peer(recv, sender, i);});
+        thread::spawn(move || { bcnet::handle_one_peer(recv, sender, block_sender, i);});
     }
 
     let resolver = Resolver::new(ResolverConfig::default(), ResolverOpts::default()).unwrap();
