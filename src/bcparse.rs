@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 use bitcoin_hashes::{Hash, sha256d};
 use serde::{Deserialize, Serialize};
-use crate::bcnet::bcmessage::{get_compact_int, reverse_hash};
+use crate::bcutils::{get_compact_int, reverse_hash};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Block {

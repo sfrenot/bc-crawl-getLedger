@@ -1,4 +1,3 @@
-use std::sync::Mutex;
 use lazy_static::lazy_static;
 use std::time::SystemTime;
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -12,45 +11,29 @@ use crate::bcblocks;
 use bitcoin_hashes::{sha256d, Hash};
 use crate::bcparse::{Block, parse_block, ParsingError};
 use crate::bcnet::bcmessage::ProcessBlockMessageError::Parsing;
+use crate::bcutils::get_compact_int;
 
 pub const VERSION:u32 = 70015;
 const PORT:u16 = 8333;
 
-// storage length
-const UNIT_16: u8 = 0xFD;
-const UNIT_32: u8 = 0xFE;
-const UNIT_64: u8 = 0xFF;
-
-const SIZE_FD: u64 = 0xFD;
-const SIZE_FFFF: u64 = 0xFFFF;
-const SIZE_FFFF_FFFF: u64 = 0xFFFFFFFF;
-
-const STORAGE_BYTE :usize= 0;
-const NUM_START :usize= 1;
-
-const UNIT_8_END: usize = 1;
-const UNIT_16_END: usize = 3;
-const UNIT_32_END: usize = 5;
-const UNIT_64_END: usize = 9;
-
 // services
-const NODE_NETWORK:u64 = 1;
-const NODE_BLOOM:u64 = 4;
-const NODE_WITNESS:u64 = 8;
-const NODE_NETWORK_LIMITED:u64  = 1024;
+const NODE_NETWORK: u64 = 1;
+const NODE_BLOOM: u64 = 4;
+const NODE_WITNESS: u64 = 8;
+const NODE_NETWORK_LIMITED: u64 = 1024;
 
 // offset for addr cmd
-pub const ADDRESS_LEN: usize =30;
-pub const TIME_FIELD_END: usize =4;
-pub const SERVICES_END:usize = 12;
-pub const IP_FIELD_END:usize= 28;
-pub const PORT_FIELD_END:usize= 30;
+pub const ADDRESS_LEN: usize = 30;
+pub const TIME_FIELD_END: usize = 4;
+pub const SERVICES_END: usize = 12;
+pub const IP_FIELD_END: usize = 28;
+pub const PORT_FIELD_END: usize = 30;
 
 // offset for version cmd
 pub const VERSION_END: usize =4;
 
 const USER_AGENT: usize = 80;
-const TIMESTAMP_END:usize= 20;
+const TIMESTAMP_END: usize = 20;
 
 // payload struct
 lazy_static! {
@@ -203,9 +186,8 @@ pub fn process_version_message(payload: &Vec<u8>) -> (u32, Vec<u8>, DateTime<Utc
     let services = payload[VERSION_END..SERVICES_END].to_vec();
     let peer_time = get_date_time(payload[SERVICES_END..TIMESTAMP_END].to_vec());
 
-    let (tmp, _) = get_compact_int(&payload[USER_AGENT..].to_vec());
+    let (tmp, start_byte) = get_compact_int(&payload[USER_AGENT..].to_vec());
     let useragent_size = tmp as usize;
-    let start_byte= get_start_byte(&useragent_size);
 
     let mut user_agent = String::new();
     if USER_AGENT + start_byte + useragent_size < payload.len() {
@@ -219,13 +201,12 @@ pub fn process_version_message(payload: &Vec<u8>) -> (u32, Vec<u8>, DateTime<Utc
 }
 
 pub fn process_addr_message(payload: &Vec<u8>) -> Vec<String>{
-    let (addr_number, _) = get_compact_int(&payload);
+    let (addr_number, start_byte) = get_compact_int(&payload);
     if addr_number < 2 {
         return vec![];
     }
 
     let mut addr = vec![];
-    let start_byte = get_start_byte(& (addr_number as usize));
     let mut read_addr = 0 ;
     // let mut new_addr = 0;
     while read_addr < addr_number {
@@ -323,21 +304,6 @@ pub fn process_block_message(payload: &Vec<u8>) -> Result<Block, ProcessBlockMes
 }
 
 //// COMMON SERVICES
-pub fn get_compact_int(payload: &Vec<u8>) -> (u64, usize) {
-    let storage_length: u8 = payload[STORAGE_BYTE];
-    // TODO: Try with match construct
-    if storage_length == UNIT_16 {
-        return (u16::from_le_bytes((&payload[NUM_START..UNIT_16_END]).try_into().unwrap()) as u64, UNIT_16_END);
-    }
-    if storage_length == UNIT_32 {
-        return (u32::from_le_bytes((&payload[NUM_START..UNIT_32_END]).try_into().unwrap()) as u64, UNIT_32_END);
-    }
-    if storage_length == UNIT_64 {
-        return (u64::from_le_bytes((&payload[NUM_START..UNIT_64_END]).try_into().unwrap()) as u64, UNIT_64_END);
-    }
-    return (storage_length as u64, UNIT_8_END);
-}
-
 fn get_date_time(mut time_vec: Vec<u8>) -> DateTime<Utc>{
     if time_vec.len() == 4 {
         /* La taille du champ varie dans le protocole de 4 à 8 octets */
@@ -354,24 +320,4 @@ fn compute_checksum(payload : &Vec<u8>) -> Vec<u8> {
     hasher2.input(sum);
     let result = hasher2.result();
     return result[0..4].to_vec();
-}
-
-fn get_start_byte(variable_length_int: & usize) -> usize {
-    let size = *variable_length_int as u64;
-    if size < SIZE_FD {
-        return NUM_START;
-    }
-    if size <= SIZE_FFFF {
-        return  UNIT_16_END;
-    }
-    if size <= SIZE_FFFF_FFFF {
-        return  UNIT_32_END
-    }
-    return UNIT_64_END
-}
-
-pub fn reverse_hash(hash: &str) -> String {
-    let mut bytes = hex::decode(hash).unwrap();
-    bytes.reverse();
-    hex::encode(bytes)
 }
