@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use crate::bcblocks;
 use chrono::{DateTime, Utc};
 use crate::bcparse::Block;
-use fs_extra::dir::{DirOptions, get_dir_content2};
+use fs_extra::dir::get_dir_content;
 use linecount::count_lines;
 use flate2::Compression;
 use flate2::GzBuilder;
@@ -108,9 +108,18 @@ fn inject_downloaded_headers_from_previous_run_at_startup() {
 
     for line in reader.lines() {
         let l = line.unwrap();
-        let block = blocks_mutex_guard.known_blocks.get(&l).cloned().expect(&format!("Unknown hash in lock file : {}", &l));
-        let (hash, next, _, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
-        blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true, false);
+        match blocks_mutex_guard.known_blocks.get(&l).cloned() {
+            Some(block) => {
+                let (hash, next, _, _) = blocks_mutex_guard.blocks_id.get(block.idx).unwrap();
+                blocks_mutex_guard.blocks_id[block.idx] = (hash.to_string(), *next, true, false);
+
+            },
+            None => {
+                eprintln!("Block inconnu {}", &l);
+                std::process::exit(1);
+            }
+        }
+
     }
     store_headers(&blocks_mutex_guard.blocks_id);
 }
@@ -159,6 +168,7 @@ pub fn store_block(block: &Block) {
     let mut gz = GzBuilder::new()
                 .write(file, Compression::default());
     gz.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
+    // gz.write_all(&format!("{:?}", block).as_bytes()[6..]).unwrap();
     gz.finish().unwrap();
 
     let mut out = HEADERS_FROM_DOWNLOADEDBLOCKS.lock().unwrap();
@@ -193,5 +203,5 @@ pub fn store_version_message(target_address: &String, (_, _, _, _): (u32, Vec<u8
 }
 
 pub fn get_vols() -> (usize, usize, usize){
-    (count_lines(File::open(BLOCKS_FILE).unwrap()).unwrap(), count_lines(File::open(UPDATED_BLOCKS_FROM_GETHEADERS).unwrap()).unwrap(), get_dir_content2(BLOCKS_DIR, &DirOptions::new()).unwrap().files.len())
+    (count_lines(File::open(BLOCKS_FILE).unwrap()).unwrap(), count_lines(File::open(UPDATED_BLOCKS_FROM_GETHEADERS).unwrap()).unwrap(), get_dir_content(BLOCKS_DIR).unwrap().files.len())
 }

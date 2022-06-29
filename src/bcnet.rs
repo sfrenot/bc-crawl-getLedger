@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering;
 use std::io::Write;
 use std::io::Error;
 use std::io::ErrorKind;
-// use pad::{PadStr, Alignment};
+use pad::{PadStr, Alignment};
 
 use std::net::{SocketAddr, TcpStream};
 use chan::Receiver;
@@ -18,12 +18,12 @@ use crate::bcblocks as bcblocks;
 use crate::bcpeers as bcpeers;
 
 const CONNECTION_TIMEOUT:Duration = Duration::from_secs(10);
-const MESSAGE_TIMEOUT:Duration = Duration::from_secs(20);
+// const READ_MESSAGE_TIMEOUT:Duration = Duration::from_secs(2);
 const MIN_ADDRESSES_RECEIVED_THRESHOLD: usize = 5;
 const NB_MAX_READ_ON_SOCKET:usize = 20;
 
 // Debugger
-// static mut NODES_STATUS:[([u8; 15], u64, u64, u64, u64, u64); crate::THREADS as usize]= [([0; 15], 0, 0, 0, 0, 0); crate::THREADS as usize];
+static mut NODES_STATUS:[([u8; 15], u64, u64, u64, u64, u64); crate::THREADS as usize]= [([0; 15], 0, 0, 0, 0, 0); crate::THREADS as usize];
 
 pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, num: u8){
     loop{ //Node Management
@@ -35,6 +35,7 @@ pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_chann
         match TcpStream::connect_timeout(&socket, CONNECTION_TIMEOUT) {
             Err(_) => bcpeers::fail(target_address.clone()),
             Ok(connection) => {
+                // connection.set_read_timeout(Some(READ_MESSAGE_TIMEOUT)).unwrap();
                 loop {
                    // eprintln!("Avant Activation {}, {}", target_address.clone(), status);
                    status = match activate_peer(&num, &connection, &status, &address_channel_tx, &target_address) {
@@ -63,7 +64,6 @@ pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_chann
 }
 
 fn handle_incoming_message<'a>(_num: &u8, connection:& TcpStream, sender: &Sender<String>, target_address: &String) -> &'a String  {
-    connection.set_read_timeout(Some(MESSAGE_TIMEOUT)).unwrap();
     let mut lecture:usize = 0; // Garde pour éviter connection infinie inutile
     loop {
 
@@ -117,26 +117,27 @@ fn next_status(from: &String) -> &String {
     }
 }
 
-// fn trace(num: &u8, target: &String, current: &String) {
-//     unsafe {
-//         let (mut node, run, mut ver, mut addr, mut head, mut data) = NODES_STATUS[*num as usize];
-//         match current {
-//             current if current == "version" => ver += 1,
-//             current if current == "getaddr" => addr += 1,
-//             current if current == "getheaders" => head += 1,
-//             current if current == "getdata" => data += 1,
-//             _ => ()
-//         };
-//
-//         node.copy_from_slice(&target.pad_to_width_with_alignment(20, Alignment::Right).as_bytes()[0..15]);
-//
-//         NODES_STATUS[*num as usize] = (node, run+1, ver, addr, head, data);
-//         for (a, b, c, d, e, f) in NODES_STATUS {
-//             eprint!("{} -> ({}/{},{},{},{},{})", &num, String::from_utf8_lossy(&a).trim(), b, c, d, e, f);
-//         }
-//         eprintln!("");
-//     }
-// }
+fn trace(num: &u8, target: &String, current: &String) {
+    unsafe {
+        let (mut node, run, mut ver, mut addr, mut head, mut data) = NODES_STATUS[*num as usize];
+        match current {
+            current if current == "version" => ver += 1,
+            current if current == "getaddr" => addr += 1,
+            current if current == "getheaders" => head += 1,
+            current if current == "getdata" => data += 1,
+            _ => ()
+        };
+
+        node.copy_from_slice(&target.pad_to_width_with_alignment(20, Alignment::Right).as_bytes()[0..15]);
+
+        eprint!("{} -> ", &num);
+        NODES_STATUS[*num as usize] = (node, run+1, ver, addr, head, data);
+        for (a, b, c, d, e, f) in NODES_STATUS {
+            eprint!("({}/{},{},{},{},{})", String::from_utf8_lossy(&a).trim(), b, c, d, e, f);
+        }
+        eprintln!("");
+    }
+}
 
 fn activate_peer<'a>(num: &u8, mut connection: &TcpStream, current: &'a String, sender: &Sender<String>, target: &String) -> Result<&'a String, Error> {
     // // Trace function

@@ -283,11 +283,8 @@ impl From<ParsingError> for ProcessBlockMessageError {
 
 pub fn process_block_message(payload: &Vec<u8>) -> Result<Block, ProcessBlockMessageError>{
     let parsed = parse_block(payload)?;
-
     let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
-
     let search_block = blocks_mutex_guard.known_blocks.get(&parsed.hash).cloned();
-
     match search_block {
         Some(found_block) => {
             let (hash, next, downloaded, _) = blocks_mutex_guard.blocks_id.get(found_block.idx).unwrap();

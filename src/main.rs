@@ -19,7 +19,7 @@ use std::process;
 
 use std::time::{Duration, SystemTime};
 const CHECK_TERMINATION_TIMEOUT:Duration = Duration::from_secs(5);
-const THREADS: u8 = 16;
+const THREADS: u8 = 5;
 const MESSAGE_CHANNEL_SIZE: usize = 100000;
 const DNS_START: &str = "seed.btc.petertodd.org";
 const PORT_START: &str = "8333";
@@ -28,15 +28,12 @@ const LOG_FILE: &str = "./file.txt";
 pub static mut LAST_VOL_BLOCKS_DIR: usize = 0;
 pub static mut LAST_VOL_HEADERS: usize = 0;
 
-
 fn main() {
     bcscript::main();
 
-    eprintln!("Début initialisation {} threads", THREADS);
     bcfile::open_logfile(LOG_FILE);
     bcfile::load_headers_at_startup();
     bcblocks::create_block_message_payload();
-    eprintln!("Fin initialisation");
     // std::process::exit(1);
 
     // eprintln!("{}", hex::encode(bcblocks::get_getblock_message_payload()));
@@ -49,6 +46,7 @@ fn main() {
     let (address_channel_sender, address_channel_receiver) = mpsc::channel();
     let (connecting_start_channel_sender, connecting_start_channel_receiver) = chan::sync(MESSAGE_CHANNEL_SIZE);
 
+    eprintln!("Début initialisation {} threads", THREADS);
     thread::spawn(move || { check_pool_size(SystemTime::now()); });
 
     for i in 0..THREADS {
