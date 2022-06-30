@@ -4,7 +4,7 @@ const UNIT_16: u8 = 0xFD;
 const UNIT_32: u8 = 0xFE;
 const UNIT_64: u8 = 0xFF;
 
-pub fn get_compact_int(payload: &Vec<u8>) -> (u64, usize) {
+pub fn get_compact_int(payload: &[u8]) -> (u64, usize) {
     let storage_length: u8 = payload[0];
 
     if storage_length == UNIT_16 {

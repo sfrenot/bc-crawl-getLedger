@@ -58,7 +58,7 @@ pub struct WitnessItem {
 #[derive(Debug)]
 pub struct ParsingError;
 
-pub fn parse_block(payload: &Vec<u8>) -> Result<Block, ParsingError> {
+pub fn parse_block(payload: &[u8]) -> Result<Block, ParsingError> {
     let mut block = Block::default();
     let mut offset = 0;
     let mut temp_bytes;
@@ -100,14 +100,14 @@ pub fn parse_block(payload: &Vec<u8>) -> Result<Block, ParsingError> {
 
     // transaction count
     temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-    let (txn_count, off) = get_compact_int(&temp_bytes.to_vec());
+    let (txn_count, off) = get_compact_int(&temp_bytes);
     offset += off;
 
     // parsing transactions
     let mut txns = Vec::new();
     for _ in 0..txn_count {
         temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-        let (txn, off) = parse_transaction(&temp_bytes.to_vec())?;
+        let (txn, off) = parse_transaction(&temp_bytes)?;
         txns.push(txn);
         offset += off;
     };
@@ -116,7 +116,7 @@ pub fn parse_block(payload: &Vec<u8>) -> Result<Block, ParsingError> {
     Ok(block)
 }
 
-fn parse_transaction(payload: &Vec<u8>) -> Result<(Transaction, usize), ParsingError> {
+fn parse_transaction(payload: &[u8]) -> Result<(Transaction, usize), ParsingError> {
     let mut txn = Transaction::default();
     let mut offset = 0;
     let mut temp_bytes;
@@ -138,14 +138,14 @@ fn parse_transaction(payload: &Vec<u8>) -> Result<(Transaction, usize), ParsingE
 
     // tx_in count
     temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-    let (input_count, off) = get_compact_int(&temp_bytes.to_vec());
+    let (input_count, off) = get_compact_int(&temp_bytes);
     offset += off;
 
     // parsing tx_in
     let mut inputs = Vec::new();
     for _ in 0..input_count {
         temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-        let (data, off) = parse_tx_input(&temp_bytes.to_vec())?;
+        let (data, off) = parse_tx_input(&temp_bytes)?;
         inputs.push(data);
         offset += off;
     };
@@ -153,14 +153,14 @@ fn parse_transaction(payload: &Vec<u8>) -> Result<(Transaction, usize), ParsingE
 
     // tx_out count
     temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-    let (output_count, off) = get_compact_int(&temp_bytes.to_vec());
+    let (output_count, off) = get_compact_int(&temp_bytes);
     offset += off;
 
     // parsing tx_out
     let mut outputs = Vec::new();
     for _ in 0..output_count {
         temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-        let (data, off) = parse_tx_output(&temp_bytes.to_vec())?;
+        let (data, off) = parse_tx_output(&temp_bytes)?;
         outputs.push(data);
         offset += off;
     };
@@ -173,7 +173,7 @@ fn parse_transaction(payload: &Vec<u8>) -> Result<(Transaction, usize), ParsingE
         let mut witnesses = Vec::new();
         for _ in 0..input_count {
             temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-            let (data, off) = parse_witness(&temp_bytes.to_vec())?;
+            let (data, off) = parse_witness(&temp_bytes)?;
             witnesses.push(data);
             offset += off;
         };
@@ -198,7 +198,7 @@ fn parse_transaction(payload: &Vec<u8>) -> Result<(Transaction, usize), ParsingE
     Ok((txn, offset))
 }
 
-fn parse_tx_input(payload: &Vec<u8>) -> Result<(TxInput, usize), ParsingError> {
+fn parse_tx_input(payload: &[u8]) -> Result<(TxInput, usize), ParsingError> {
     let mut tx_input = TxInput::default();
     let mut prev_output = OutPoint::default();
     let mut offset = 0;
@@ -217,7 +217,7 @@ fn parse_tx_input(payload: &Vec<u8>) -> Result<(TxInput, usize), ParsingError> {
 
     // script length in bytes
     temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-    let (script_length, off) = get_compact_int(&temp_bytes.to_vec());
+    let (script_length, off) = get_compact_int(&temp_bytes);
     offset += off;
 
     // signature script
@@ -235,7 +235,7 @@ fn parse_tx_input(payload: &Vec<u8>) -> Result<(TxInput, usize), ParsingError> {
     Ok((tx_input, offset))
 }
 
-fn parse_tx_output(payload: &Vec<u8>) -> Result<(TxOutput, usize), ParsingError> {
+fn parse_tx_output(payload: &[u8]) -> Result<(TxOutput, usize), ParsingError> {
     let mut tx_output = TxOutput::default();
     let mut offset = 0;
     let mut temp_bytes;
@@ -247,7 +247,7 @@ fn parse_tx_output(payload: &Vec<u8>) -> Result<(TxOutput, usize), ParsingError>
 
     // pubkey script length
     temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-    let (script_length, off) = get_compact_int(&temp_bytes.to_vec());
+    let (script_length, off) = get_compact_int(&temp_bytes);
     offset += off;
 
     // pubkey script
@@ -258,21 +258,21 @@ fn parse_tx_output(payload: &Vec<u8>) -> Result<(TxOutput, usize), ParsingError>
     Ok((tx_output, offset))
 }
 
-fn parse_witness(payload: &Vec<u8>) -> Result<(Witness, usize), ParsingError> {
+fn parse_witness(payload: &[u8]) -> Result<(Witness, usize), ParsingError> {
     let mut witness = Witness::default();
     let mut offset = 0;
     let mut temp_bytes;
 
     // witness item count
     temp_bytes = payload.get(..).ok_or(ParsingError)?;
-    let (item_count, off) = get_compact_int(&temp_bytes.to_vec());
+    let (item_count, off) = get_compact_int(&temp_bytes);
     offset += off;
 
     // parsing items
     let mut items = Vec::new();
     for _ in 0..item_count {
         temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-        let (txn, off) = parse_witness_item(&temp_bytes.to_vec())?;
+        let (txn, off) = parse_witness_item(&temp_bytes)?;
         items.push(txn);
         offset += off;
     };
@@ -281,14 +281,14 @@ fn parse_witness(payload: &Vec<u8>) -> Result<(Witness, usize), ParsingError> {
     Ok((witness, offset))
 }
 
-fn parse_witness_item(payload: &Vec<u8>) -> Result<(WitnessItem, usize), ParsingError> {
+fn parse_witness_item(payload: &[u8]) -> Result<(WitnessItem, usize), ParsingError> {
     let mut witness_item = WitnessItem::default();
     let mut offset = 0;
     let mut temp_bytes;
 
     // item script length
     temp_bytes = payload.get(..).ok_or(ParsingError)?;
-    let (length, off) = get_compact_int(&temp_bytes.to_vec());
+    let (length, off) = get_compact_int(&temp_bytes);
     offset += off;
 
     // item script
