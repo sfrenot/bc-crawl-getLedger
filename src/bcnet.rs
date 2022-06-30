@@ -1,5 +1,7 @@
 pub mod bcmessage;
 
+use std::sync::Mutex;
+use lazy_static::lazy_static;
 use std::time::Duration;
 use std::sync::mpsc::Sender;
 use std::sync::atomic::Ordering;
@@ -17,6 +19,7 @@ use bcmessage::{MSG_VERSION, MSG_VERSION_ACK, MSG_GETADDR, CONN_CLOSE, MSG_ADDR,
 use crate::bcfile as bcfile;
 use crate::bcblocks as bcblocks;
 use crate::bcpeers as bcpeers;
+use std::collections::HashMap;
 
 const CONNECTION_TIMEOUT:Duration = Duration::from_secs(10);
 // const READ_MESSAGE_TIMEOUT:Duration = Duration::from_secs(2);
@@ -25,6 +28,9 @@ const NB_MAX_READ_ON_SOCKET:usize = 20;
 
 // Debugger
 static mut NODES_STATUS:[([u8; 15], u64, u64, u64, u64, u64); crate::THREADS as usize]= [([0; 15], 0, 0, 0, 0, 0); crate::THREADS as usize];
+lazy_static! {
+    pub static ref NB_NOEUDS_CONNECTES:Mutex<HashMap<u8, usize>> = Mutex::new(HashMap::new());
+}
 
 pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, block_sender: Sender<Block>, num: u8){
     loop{ //Node Management
@@ -131,18 +137,20 @@ fn trace(num: &u8, target: &String, current: &String) {
 
         node.copy_from_slice(&target.pad_to_width_with_alignment(20, Alignment::Right).as_bytes()[0..15]);
 
-        eprint!("{} -> ", &num);
+        // eprint!("{} -> ", &num);
         NODES_STATUS[*num as usize] = (node, run+1, ver, addr, head, data);
         for (a, b, c, d, e, f) in NODES_STATUS {
-            eprint!("({}/{},{},{},{},{})", String::from_utf8_lossy(&a).trim(), b, c, d, e, f);
+            if f > 2 {
+                NB_NOEUDS_CONNECTES.lock().unwrap().insert(*num, 1);
+            }
+            // eprint!("({}/{},{},{},{},{})", String::from_utf8_lossy(&a).trim(), b, c, d, e, f);
         }
-        eprintln!("");
     }
 }
 
 fn activate_peer<'a>(num: &u8, mut connection: &TcpStream, current: &'a String, sender: &Sender<String>, block_sender: &Sender<Block>, target: &String) -> Result<&'a String, Error> {
     // // Trace function
-    // trace(&num, &target, &current);
+    trace(&num, &target, &current);
 
     connection.write(bcmessage::build_request(current).as_slice()).unwrap();
 
@@ -197,8 +205,7 @@ fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize, block_s
 
     match bcmessage::process_block_message(payload) {
         Ok(block) => {
-            block_sender.send(block);
-            // bcfile::store_block(&block);
+            block_sender.send(block).unwrap();
             *lecture = 0;
             // eprintln!("new block stored");
             true

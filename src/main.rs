@@ -19,7 +19,7 @@ use std::process;
 
 use std::time::{Duration, SystemTime};
 const CHECK_TERMINATION_TIMEOUT:Duration = Duration::from_secs(5);
-const THREADS: u8 = 20;
+const THREADS: u8 = 4;
 const MESSAGE_CHANNEL_SIZE: usize = 100000;
 const DNS_START: &str = "seed.btc.petertodd.org";
 const PORT_START: &str = "8333";
@@ -81,9 +81,18 @@ fn check_pool_size(start_time: SystemTime ){
         let (hedrs, new_hders, blocks) = bcfile::get_vols();
         let duree = now.elapsed().unwrap().as_secs();
 
-        eprintln!("Total: {} nodes\t -> TBD: {}, Done: {}, Fail: {}", total, other, done, failed);
+        // let memory = &bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id;
+        // let mut tot_downloaded = 0;
+        // for (_, _, _, downloaded) in memory {
+        //     if *downloaded {
+        //         tot_downloaded += 1;
+        //     }
+        // }
+        // eprintln!("Nombre de block {} dont {} chargés", memory.len(), tot_downloaded);
+
         unsafe {
-            eprintln!("{}s Volume / Speed\t\t -> Missing Headers : {}-{}/s,  Downloaded Blocks : {}-{}/s", duree, (hedrs+new_hders), (hedrs+new_hders-LAST_VOL_HEADERS)/duree as usize, blocks, (blocks-LAST_VOL_BLOCKS_DIR)/duree as usize);
+            eprintln!("Total: {} nodes\t -> TBD: {}, Done: {}, Fail: {}, ConnectéData: {}/{}", total, other, done, failed, bcnet::NB_NOEUDS_CONNECTES.lock().unwrap().len(), THREADS);
+            eprintln!("{}s Volume / Speed\t\t -> Missing Headers : {}-{}/s,  Downloaded Blocks : {}-{}/s différence {}", duree, (hedrs+new_hders), (hedrs+new_hders-LAST_VOL_HEADERS)/duree as usize, blocks, (blocks-LAST_VOL_BLOCKS_DIR)/duree as usize, blocks-LAST_VOL_BLOCKS_DIR as usize);
             LAST_VOL_HEADERS = hedrs+new_hders;
             LAST_VOL_BLOCKS_DIR = blocks;
         }
