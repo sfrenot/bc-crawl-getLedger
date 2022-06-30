@@ -9,7 +9,7 @@ use std::convert::TryInto;
 use hex::{FromHex};
 use crate::bcblocks;
 use bitcoin_hashes::{sha256d, Hash};
-use crate::bcparse::{Block, parse_block, parse_block_sfr, ParsingError};
+use crate::bcparse::{Block, parse_block, ParsingError};
 use crate::bcnet::bcmessage::ProcessBlockMessageError::Parsing;
 use crate::bcutils::get_compact_int;
 
@@ -282,17 +282,6 @@ impl From<ParsingError> for ProcessBlockMessageError {
 }
 
 pub fn process_block_message(payload: &Vec<u8>) -> Result<Block, ProcessBlockMessageError>{
-    // Perf test
-    //
-    // let now = std::time::SystemTime::now();
-    // let parsed = parse_block_sfr(&payload.clone())?;
-    // let duree_sfr = now.elapsed().unwrap().as_millis();
-    //
-    // let now = std::time::SystemTime::now();
-    // let parsed = parse_block(&payload.clone())?;
-    // let duree_ori = now.elapsed().unwrap().as_millis();
-    //
-    // eprintln!("-> ori{}, sfr{}", duree_ori, duree_sfr);
 
     let parsed = parse_block(&payload)?;
     let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
