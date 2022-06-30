@@ -147,7 +147,7 @@ fn store_headers(headers: &Vec<(String, bool, bool, bool)>) {
         idx += 1;
     }
     file.write_all(b"\n]").unwrap();
-    file.flush();
+    file.flush().unwrap();
     fs::rename(BLOCKS_TMP_FILE, BLOCKS_FILE).unwrap();
     HEADERS_FROM_DOWNLOADEDBLOCKS.lock().unwrap().set_len(0).unwrap();
     HEADERS_FROM_GETHEADERS.lock().unwrap().set_len(0).unwrap();
@@ -159,7 +159,7 @@ pub fn store_headers2(headers: Vec<String>) {
         out.write_all(header.as_bytes()).unwrap();
         out.write_all(b"\n").unwrap();
     }
-    out.flush();
+    out.flush().unwrap();
 }
 
 pub fn store_block(block_channel: Receiver<Block>) {
@@ -191,7 +191,7 @@ pub fn open_logfile(file_name :&str) {
 pub fn store_event(msg :&String){
     let mut guard = LOGGER.lock().unwrap();
     guard.write_all(msg.as_ref()).expect("error at logging");
-    guard.flush();
+    guard.flush().unwrap();
 }
 
 pub fn store_version_message(target_address: &String, (_, _, _, _): (u32, Vec<u8>, DateTime<Utc>, String)){

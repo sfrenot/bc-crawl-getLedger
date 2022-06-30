@@ -139,7 +139,7 @@ fn trace(num: &u8, target: &String, current: &String) {
 
         // eprint!("{} -> ", &num);
         NODES_STATUS[*num as usize] = (node, run+1, ver, addr, head, data);
-        for (a, b, c, d, e, f) in NODES_STATUS {
+        for (_a, _b, _c, _d, _e, f) in NODES_STATUS {
             if f > 2 {
                 NB_NOEUDS_CONNECTES.lock().unwrap().insert(*num, 1);
             }

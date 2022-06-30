@@ -83,7 +83,7 @@ fn check_pool_size(start_time: SystemTime ){
 
         // let memory = &bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id;
         // let mut tot_downloaded = 0;
-        // for (_, _, _, downloaded) in memory {
+        // for (_, _, downloaded, _) in memory {
         //     if *downloaded {
         //         tot_downloaded += 1;
         //     }

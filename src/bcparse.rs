@@ -59,130 +59,120 @@ pub struct WitnessItem {
 pub struct ParsingError;
 
 pub fn parse_block(payload: &Vec<u8>) -> Result<Block, ParsingError> {
+    // let now = std::time::SystemTime::now();
+
     let mut block = Block::default();
     let mut offset = 0;
-    let mut temp_bytes;
+    // let mut temp_bytes;
+    let mut hash32:[u8; 32] = [0;32];
+    let mut hash4:[u8; 4] = [0; 4];
 
     // header hash
-    temp_bytes = payload.get(..80).ok_or(ParsingError)?;
-    block.hash = sha256d::Hash::hash(temp_bytes).to_string();
+    block.hash = sha256d::Hash::hash(&payload[..80]).to_string();
 
     // version
-    temp_bytes = &payload[..4];
-    block.version = i32::from_le_bytes(temp_bytes.try_into().unwrap());
+    for i in 0..4 {hash4[i] = payload[offset+i];}
+    block.version = i32::from_le_bytes(hash4);
     offset += 4;
 
     // previous block hash
-    temp_bytes = &payload[offset..offset+32];
-    let prev_hash = hex::encode(temp_bytes);
-    block.prev_hash = reverse_hash(&prev_hash);
+    for i in 0..32 {hash32[i] = payload[offset+(32-i)-1];}
+    block.prev_hash = hex::encode(hash32);
     offset += 32;
 
     // merkle root hash
-    temp_bytes = &payload[offset..offset+32];
-    block.merkle_root = hex::encode(temp_bytes);
+    for i in 0..32 {hash32[i] = payload[offset+i];}
+    block.merkle_root = hex::encode(hash32);
     offset += 32;
 
     // timestamp
-    temp_bytes = &payload[offset..offset+4];
-    block.timestamp = u32::from_le_bytes(temp_bytes.try_into().unwrap());
+    for i in 0..4 {hash4[i] = payload[offset+i];}
+    block.timestamp = u32::from_le_bytes(hash4);
     offset += 4;
 
     // bits
-    temp_bytes = &payload[offset..offset+4];
-    block.bits = u32::from_le_bytes(temp_bytes.try_into().unwrap());
+    for i in 0..4 {hash4[i] = payload[offset+i];}
+    block.bits = u32::from_le_bytes(hash4);
     offset += 4;
 
     // nonce
-    temp_bytes = &payload[offset..offset+4];
-    block.nonce = u32::from_le_bytes(temp_bytes.try_into().unwrap());
+    for i in 0..4 {hash4[i] = payload[offset+i];}
+    block.nonce = u32::from_le_bytes(hash4);
     offset += 4;
 
     // transaction count
-    temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-    let (txn_count, off) = get_compact_int(&temp_bytes.to_vec());
+    let (txn_count, off) = get_compact_int(&payload[offset..].to_vec());
     offset += off;
 
     // parsing transactions
     let mut txns = Vec::new();
     for _ in 0..txn_count {
-        temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-        let (txn, off) = parse_transaction(&temp_bytes.to_vec())?;
+        let (txn, off) = parse_transaction(&payload[offset..].to_vec())?;
         txns.push(txn);
         offset += off;
     };
     block.txns = txns;
 
+    // let duree = now.elapsed().unwrap().as_millis();
+    // eprintln!("-> {}", duree);
     Ok(block)
 }
 
 pub fn parse_transaction(payload: &Vec<u8>) -> Result<(Transaction, usize), ParsingError> {
     let mut txn = Transaction::default();
     let mut offset = 0;
-    let mut temp_bytes;
     let mut raw_txn = Vec::new();
 
     // version
-    temp_bytes = payload.get(..4).ok_or(ParsingError)?;
-    txn.version = i32::from_le_bytes(temp_bytes.try_into().unwrap());
+    // temp_bytes = payload.get(..4).ok_or(ParsingError)?;
+    txn.version = i32::from_le_bytes(payload[..4].try_into().unwrap());
     offset += 4;
 
     // segwit flag
-    temp_bytes = payload.get(offset..offset+2).ok_or(ParsingError)?;
-    if temp_bytes == &[0x00, 0x01] {
+    if payload[offset..offset+2] == [0x00, 0x01] {
         txn.is_segwit = true;
         offset += 2;
-
         raw_txn.extend_from_slice(&payload[..4]); // if segwit, we create a clean txn for the hash
     }
 
     // tx_in count
-    temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-    let (input_count, off) = get_compact_int(&temp_bytes.to_vec());
+    let (input_count, off) = get_compact_int(&payload[offset..].to_vec());
     offset += off;
 
     // parsing tx_in
-    let mut inputs = Vec::new();
     for _ in 0..input_count {
-        temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-        let (data, off) = parse_tx_input(&temp_bytes.to_vec())?;
-        inputs.push(data);
+        let (data, off) = parse_tx_input(&payload[offset..].to_vec())?;
+        txn.inputs.push(data);
         offset += off;
     };
-    txn.inputs = inputs;
 
     // tx_out count
-    temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-    let (output_count, off) = get_compact_int(&temp_bytes.to_vec());
+    let (output_count, off) = get_compact_int(&payload[offset..].to_vec());
     offset += off;
 
     // parsing tx_out
-    let mut outputs = Vec::new();
     for _ in 0..output_count {
-        temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-        let (data, off) = parse_tx_output(&temp_bytes.to_vec())?;
-        outputs.push(data);
+        let (data, off) = parse_tx_output(&payload[offset..].to_vec())?;
+        txn.outputs.push(data);
         offset += off;
     };
-    txn.outputs = outputs;
 
     // parsing segregated witnesses if any
     if txn.is_segwit {
         raw_txn.extend_from_slice(&payload[6..offset]);
 
-        let mut witnesses = Vec::new();
         for _ in 0..input_count {
-            temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-            let (data, off) = parse_witness(&temp_bytes.to_vec())?;
-            witnesses.push(data);
+            let (data, off) = parse_witness(&payload[offset..].to_vec())?;
+            txn.witnesses.push(data);
             offset += off;
         };
-        txn.witnesses = witnesses;
     }
 
+    //TODO: check this value
+    let temp_bytes = payload.get(offset..offset+4).ok_or(ParsingError)?;
+
     // lock time
-    temp_bytes = payload.get(offset..offset+4).ok_or(ParsingError)?;
-    txn.lock_time = u32::from_le_bytes(temp_bytes.try_into().unwrap());
+    txn.lock_time = u32::from_le_bytes(payload[offset..offset+4].try_into().unwrap());
     offset += 4;
 
     // hash
