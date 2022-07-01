@@ -77,7 +77,7 @@ pub fn create_block_message_payload() {
     let mut block_message = TEMPLATE_GETBLOCK_PAYLOAD.lock().unwrap();
     *block_message = Vec::with_capacity(block_message.len()+32);
     block_message.extend(VERSION.to_le_bytes());
-    block_message.extend([blocks_id.len() as u8-1]);
+    block_message.push(1);
 
     let (lastbloc, _, _, _) = blocks_id.last().unwrap();
     let val = Vec::from_hex(lastbloc).unwrap();
