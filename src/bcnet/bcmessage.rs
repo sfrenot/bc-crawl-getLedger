@@ -248,15 +248,14 @@ pub fn process_headers_message(payload: &Vec<u8>) -> Result<Vec<String>, Process
     for _i in 0..nb_headers {
         let mut previous_block = [0;32];
         previous_block.clone_from_slice(&payload[offset+4..offset+4+32]);
-        previous_block.reverse();
-        let current_block = sha256d::Hash::hash(&payload[offset..offset+header_length]);
+        let current_block = hex::encode(sha256d::Hash::hash(&payload[offset..offset+header_length]));
         // eprintln!("Gen -> {} --> {}", hex::encode(previous_block), current_block.to_string());
-        match bcblocks::is_new(current_block.to_string(), hex::encode(previous_block)) {
+        match bcblocks::is_new(&current_block, &hex::encode(previous_block)) {
             Ok(idx) if idx > highest_index => {
                 highest_index = idx;
-                new_blocks.push(current_block.to_string());
+                new_blocks.push(current_block);
             },
-            Ok(_) => {new_blocks.push(current_block.to_string());},
+            Ok(_) => { new_blocks.push(current_block.to_string()); },
             Err(()) => return Err(ProcessHeadersMessageError::UnkownBlocks)
         };
         offset+=header_length+1
@@ -282,7 +281,6 @@ impl From<ParsingError> for ProcessBlockMessageError {
 }
 
 pub fn process_block_message(payload: &Vec<u8>) -> Result<Block, ProcessBlockMessageError>{
-
     let parsed = parse_block(&payload)?;
     let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
     let search_block = blocks_mutex_guard.known_blocks.get(&parsed.hash).cloned();

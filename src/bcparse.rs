@@ -1,13 +1,18 @@
 use std::convert::TryInto;
+use std::fmt;
 use bitcoin_hashes::{Hash, sha256d};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::{Error, Visitor};
 use crate::bcutils::{get_compact_int, reverse_hash};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Block {
+    #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
     pub hash: String,
     pub version: i32,
+    #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
     pub prev_hash: String,
+    #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
     pub merkle_root: String,
     pub timestamp: u32,
     pub bits: u32,
@@ -17,6 +22,7 @@ pub struct Block {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Transaction {
+    #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
     pub hash: String,
     pub version: i32,
     pub is_segwit: bool,
@@ -35,6 +41,7 @@ pub struct TxInput {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct OutPoint {
+    #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
     pub hash: String,
     pub idx: u32
 }
@@ -58,6 +65,29 @@ pub struct WitnessItem {
 #[derive(Debug)]
 pub struct ParsingError;
 
+// custom serialization and deserialization
+fn serialize_hash<S>(hash: &str, s: S) -> Result<S::Ok, S::Error> where S: Serializer {
+    s.serialize_str(&reverse_hash(hash))
+}
+
+struct HashVisitor;
+impl<'de> Visitor<'de> for HashVisitor {
+    type Value = String;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a bitcoin hash")
+    }
+
+    fn visit_str<E>(self, s: &str) -> Result<Self::Value, E> where E: Error {
+        let res = reverse_hash(s);
+        Ok(res)
+    }
+}
+
+fn deserialize_hash<'de, D>(d: D) -> Result<String, D::Error> where D: Deserializer<'de> {
+    d.deserialize_string(HashVisitor)
+}
+
 pub fn parse_block(payload: &[u8]) -> Result<Block, ParsingError> {
     let mut block = Block::default();
     let mut offset = 0;
@@ -65,7 +95,7 @@ pub fn parse_block(payload: &[u8]) -> Result<Block, ParsingError> {
 
     // header hash
     temp_bytes = payload.get(..80).ok_or(ParsingError)?;
-    block.hash = sha256d::Hash::hash(temp_bytes).to_string();
+    block.hash = hex::encode(sha256d::Hash::hash(temp_bytes));
 
     // version
     temp_bytes = &payload[..4];
@@ -74,8 +104,7 @@ pub fn parse_block(payload: &[u8]) -> Result<Block, ParsingError> {
 
     // previous block hash
     temp_bytes = &payload[offset..offset+32];
-    let prev_hash = hex::encode(temp_bytes);
-    block.prev_hash = reverse_hash(&prev_hash);
+    block.prev_hash = hex::encode(temp_bytes);
     offset += 32;
 
     // merkle root hash
@@ -186,34 +215,35 @@ fn parse_transaction(payload: &[u8]) -> Result<(Transaction, usize), ParsingErro
     offset += 4;
 
     // hash
-    let hash;
-    if txn.is_segwit {
-        raw_txn.extend_from_slice(temp_bytes);
-        hash = hex::encode(sha256d::Hash::hash(&raw_txn));
-    } else {
-        hash = hex::encode(sha256d::Hash::hash(&payload[..offset]));
-    }
-    txn.hash = reverse_hash(&hash);
+    txn.hash = match txn.is_segwit {
+        true => {
+            raw_txn.extend_from_slice(temp_bytes);
+            hex::encode(sha256d::Hash::hash(&raw_txn))
+        },
+        false => hex::encode(sha256d::Hash::hash(&payload[..offset]))
+    };
 
     Ok((txn, offset))
 }
 
 fn parse_tx_input(payload: &[u8]) -> Result<(TxInput, usize), ParsingError> {
     let mut tx_input = TxInput::default();
-    let mut prev_output = OutPoint::default();
     let mut offset = 0;
     let mut temp_bytes;
 
+    let mut prev_output = OutPoint::default();
+
     // previous transaction hash
     temp_bytes = payload.get(..32).ok_or(ParsingError)?;
-    let prev_hash = hex::encode(temp_bytes);
-    prev_output.hash = reverse_hash(&prev_hash);
+    prev_output.hash = hex::encode(temp_bytes);
     offset += 32;
 
     // previous transaction output index
     temp_bytes = payload.get(offset..offset+4).ok_or(ParsingError)?;
     prev_output.idx = u32::from_le_bytes(temp_bytes.try_into().unwrap());
     offset += 4;
+
+    tx_input.prev_output = prev_output;
 
     // script length in bytes
     temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
@@ -229,8 +259,6 @@ fn parse_tx_input(payload: &[u8]) -> Result<(TxInput, usize), ParsingError> {
     temp_bytes = payload.get(offset..offset+4).ok_or(ParsingError)?;
     tx_input.sequence = u32::from_le_bytes(temp_bytes.try_into().unwrap());
     offset += 4;
-
-    tx_input.prev_output = prev_output;
 
     Ok((tx_input, offset))
 }

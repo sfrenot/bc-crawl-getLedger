@@ -65,8 +65,7 @@ pub fn create_getdata_message_payload() -> Vec<u8>{
         }
     }
 
-    let mut block = Vec::from_hex(search_block).unwrap();
-    block.reverse();
+    let block = Vec::from_hex(search_block).unwrap();
     // eprintln!("new getdata -> {:02x?}", block);
     // std::process:exit(1)
     block_message.extend(block);
@@ -81,8 +80,7 @@ pub fn create_block_message_payload() {
     block_message.extend([blocks_id.len() as u8-1]);
 
     let (lastbloc, _, _, _) = blocks_id.last().unwrap();
-    let mut val = Vec::from_hex(lastbloc).unwrap();
-    val.reverse();
+    let val = Vec::from_hex(lastbloc).unwrap();
     block_message.extend(val);
 
     let (firstbloc, _, _, _) = &blocks_id[0];
@@ -97,11 +95,11 @@ pub fn create_block_message_payload() {
     // std::process::exit(1);
 }
 
-pub fn is_new(block: String, previous: String ) -> Result<usize, ()> {
+pub fn is_new(block: &str, previous: &str) -> Result<usize, ()> {
     let mut blocks_mutex_guard = BLOCKS_MUTEX.lock().unwrap();
 
-    let search_block =  blocks_mutex_guard.known_blocks.get(&block).cloned();
-    let search_previous = blocks_mutex_guard.known_blocks.get(&previous).cloned();
+    let search_block =  blocks_mutex_guard.known_blocks.get(block).cloned();
+    let search_previous = blocks_mutex_guard.known_blocks.get(previous).cloned();
 
     match search_previous {
         Some(previous_block) => {
@@ -109,10 +107,10 @@ pub fn is_new(block: String, previous: String ) -> Result<usize, ()> {
                 None => {
                     let (val, _, downloaded, _) = blocks_mutex_guard.blocks_id.get(previous_block.idx).unwrap();
                     blocks_mutex_guard.blocks_id[previous_block.idx] =  (val.to_string(), true, *downloaded, false);
-                    blocks_mutex_guard.blocks_id.insert((previous_block.idx+1) as usize, (block.clone(), false, false, false));
+                    blocks_mutex_guard.blocks_id.insert((previous_block.idx+1) as usize, (block.to_string(), false, false, false));
 
                     let idx = previous_block.idx + 1;
-                    blocks_mutex_guard.known_blocks.insert(block.clone(), BlockDesc{idx, previous});
+                    blocks_mutex_guard.known_blocks.insert(block.to_string(), BlockDesc{idx, previous: previous.to_string()});
                     // eprintln!("Trouvé previous, Pas trouvé block");
                     // eprintln!("{:?}", blocks_id);
                     // eprintln!("{:?}", known_block);
@@ -129,9 +127,9 @@ pub fn is_new(block: String, previous: String ) -> Result<usize, ()> {
                 Some(found_block) => {
                     // eprintln!("Previous {} non trouvé, Block trouvé {}", &previous, &block);
                     let idx = found_block.idx;
-                    let val = BlockDesc{idx, previous: previous.clone()};
-                    blocks_mutex_guard.known_blocks.insert(block.clone(), val);
-                    blocks_mutex_guard.blocks_id.insert(idx, (previous.clone(), true, false, false));
+                    let val = BlockDesc{idx, previous: previous.to_string()};
+                    blocks_mutex_guard.known_blocks.insert(block.to_string(), val);
+                    blocks_mutex_guard.blocks_id.insert(idx, (previous.to_string(), true, false, false));
                     eprintln!("Previous non {}, Block oui {}", &previous, &block);
 
                     // eprintln!("{:?}", blocks_id);

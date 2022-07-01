@@ -13,6 +13,7 @@ use linecount::count_lines;
 use flate2::Compression;
 use flate2::GzBuilder;
 use std::sync::mpsc::Receiver;
+use crate::bcutils::reverse_hash;
 
 const BLOCKS_DIR: &str = "./blocks";
 const BLOCKS_FILE: &str = "./blocks.json";
@@ -29,7 +30,7 @@ lazy_static! {
     // pub static ref SORTIE:LineWriter<File> = LineWriter::new(File::create("./blocks.raw").unwrap());
     // pub static ref TO_UPDATE_COUNT: Mutex<usize> = Mutex::new(0);
     // pub static ref SORTIE:LineWriter<File> = LineWriter::new(File::create(UPDATED_BLOCKS_FROM_GETBLOCK).unwrap());
-    pub static ref HEADERS_FROM_DOWNLOADEDBLOCKS: Mutex<File> = Mutex::new(File::options().append(true).create(true).open(UPDATED_BLOCKS_FROM_GETBLOCK).unwrap());
+    pub static ref HEADERS_FROM_DOWNLOADED_BLOCKS: Mutex<File> = Mutex::new(File::options().append(true).create(true).open(UPDATED_BLOCKS_FROM_GETBLOCK).unwrap());
     pub static ref HEADERS_FROM_GETHEADERS: Mutex<File> = Mutex::new(File::options().append(true).create(true).open(UPDATED_BLOCKS_FROM_GETHEADERS).unwrap());
 }
 
@@ -149,7 +150,7 @@ fn store_headers(headers: &Vec<(String, bool, bool, bool)>) {
     file.write_all(b"\n]").unwrap();
     file.flush().unwrap();
     fs::rename(BLOCKS_TMP_FILE, BLOCKS_FILE).unwrap();
-    HEADERS_FROM_DOWNLOADEDBLOCKS.lock().unwrap().set_len(0).unwrap();
+    HEADERS_FROM_DOWNLOADED_BLOCKS.lock().unwrap().set_len(0).unwrap();
     HEADERS_FROM_GETHEADERS.lock().unwrap().set_len(0).unwrap();
 }
 
@@ -166,16 +167,17 @@ pub fn store_block(block_channel: Receiver<Block>) {
     for block in block_channel.iter() {
 
         // eprintln!("Storing {}",block.hash);
-        let dir_path = format!("./{}/{}", BLOCKS_DIR, &block.hash[block.hash.len()-3..]);
+        let rev_hash = reverse_hash(&block.hash);
+        let dir_path = format!("./{}/{}", BLOCKS_DIR, &rev_hash[rev_hash.len()-3..]);
         fs::create_dir_all(&dir_path).unwrap();
 
-        let file = File::create(format!("{}/{}.json.gz", dir_path, &block.hash[..block.hash.len()-3])).unwrap();
+        let file = File::create(format!("{}/{}.json.gz", dir_path, &rev_hash[..rev_hash.len()-3])).unwrap();
         let mut gz = GzBuilder::new()
                     .write(file, Compression::default());
         gz.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
         gz.finish().unwrap();
 
-        let mut out = HEADERS_FROM_DOWNLOADEDBLOCKS.lock().unwrap();
+        let mut out = HEADERS_FROM_DOWNLOADED_BLOCKS.lock().unwrap();
         out.write_all(block.hash.as_bytes()).unwrap();
         out.write_all(b"\n").unwrap();
         out.flush().unwrap();

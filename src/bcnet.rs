@@ -173,7 +173,6 @@ fn handle_incoming_cmd_msg_addr(payload: &Vec<u8>, sender: &Sender<String>) -> b
 }
 
 fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> bool {
-
     // eprintln!("Status : {} -> {}", idx, block);
     match bcmessage::process_headers_message(payload) {
         Ok(blocks) => {
@@ -202,7 +201,6 @@ fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> boo
 }
 
 fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize, block_sender: &Sender<Block>) -> bool {
-
     match bcmessage::process_block_message(payload) {
         Ok(block) => {
             block_sender.send(block).unwrap();
