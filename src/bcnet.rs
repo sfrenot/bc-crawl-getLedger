@@ -177,7 +177,7 @@ fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> boo
     match bcmessage::process_headers_message(payload) {
         Ok(blocks) => {
             // eprintln!("-> {:?}", blocks);
-            bcfile::store_headers2(blocks);
+            bcfile::store_headers(blocks);
             bcblocks::create_block_message_payload();
             // eprintln!("new payload -> {:02x?}", hex::encode(&bcblocks::get_getheaders_message_payload()));
             // eprintln!("new payload");
