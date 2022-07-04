@@ -10,7 +10,7 @@ use byteorder::{ReadBytesExt, LittleEndian};
 pub struct Block {
     #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
     pub hash: String,
-    pub version: u32,
+    pub version: i32,
     #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
     pub prev_hash: String,
     #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
@@ -107,7 +107,7 @@ fn get_transactions(payload: &[u8]) -> Result<Vec<Transaction>, ParsingError> {
 pub fn parse_block(payload: &[u8]) -> Result<Block, ParsingError> {
     return Ok(Block {
         hash: hex::encode(sha256d::Hash::hash(payload.get(..80).ok_or(ParsingError)?)),
-        version: (&payload[..4]).read_u32::<LittleEndian>().unwrap(),
+        version: (&payload[..4]).read_i32::<LittleEndian>().unwrap(),
         prev_hash: hex::encode(&payload[4..4+32]),
         merkle_root: hex::encode(&payload[36..36+32]),
         timestamp: (&payload[68..68+4]).read_u32::<LittleEndian>().unwrap(),
