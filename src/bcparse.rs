@@ -4,12 +4,13 @@ use bitcoin_hashes::{Hash, sha256d};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{Error, Visitor};
 use crate::bcutils::{get_compact_int, reverse_hash};
+use byteorder::{ReadBytesExt, LittleEndian};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Block {
     #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
     pub hash: String,
-    pub version: i32,
+    pub version: u32,
     #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
     pub prev_hash: String,
     #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
@@ -88,61 +89,32 @@ fn deserialize_hash<'de, D>(d: D) -> Result<String, D::Error> where D: Deseriali
     d.deserialize_string(HashVisitor)
 }
 
-pub fn parse_block(payload: &[u8]) -> Result<Block, ParsingError> {
-    let mut block = Block::default();
+fn get_transactions(payload: &[u8]) -> Result<Vec<Transaction>, ParsingError> {
+    // let mut temp_bytes;
     let mut offset = 0;
-    let mut temp_bytes;
-
-    // header hash
-    temp_bytes = payload.get(..80).ok_or(ParsingError)?;
-    block.hash = hex::encode(sha256d::Hash::hash(temp_bytes));
-
-    // version
-    temp_bytes = &payload[..4];
-    block.version = i32::from_le_bytes(temp_bytes.try_into().unwrap());
-    offset += 4;
-
-    // previous block hash
-    temp_bytes = &payload[offset..offset+32];
-    block.prev_hash = hex::encode(temp_bytes);
-    offset += 32;
-
-    // merkle root hash
-    temp_bytes = &payload[offset..offset+32];
-    block.merkle_root = hex::encode(temp_bytes);
-    offset += 32;
-
-    // timestamp
-    temp_bytes = &payload[offset..offset+4];
-    block.timestamp = u32::from_le_bytes(temp_bytes.try_into().unwrap());
-    offset += 4;
-
-    // bits
-    temp_bytes = &payload[offset..offset+4];
-    block.bits = u32::from_le_bytes(temp_bytes.try_into().unwrap());
-    offset += 4;
-
-    // nonce
-    temp_bytes = &payload[offset..offset+4];
-    block.nonce = u32::from_le_bytes(temp_bytes.try_into().unwrap());
-    offset += 4;
-
-    // transaction count
-    temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-    let (txn_count, off) = get_compact_int(&temp_bytes);
+    let (txn_count, off) = get_compact_int(&payload);
     offset += off;
-
-    // parsing transactions
     let mut txns = Vec::new();
     for _ in 0..txn_count {
-        temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
+        let temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
         let (txn, off) = parse_transaction(&temp_bytes)?;
         txns.push(txn);
         offset += off;
     };
-    block.txns = txns;
+    Ok(txns)
+}
 
-    Ok(block)
+pub fn parse_block(payload: &[u8]) -> Result<Block, ParsingError> {
+    return Ok(Block {
+        hash: hex::encode(sha256d::Hash::hash(payload.get(..80).ok_or(ParsingError)?)),
+        version: (&payload[..4]).read_u32::<LittleEndian>().unwrap(),
+        prev_hash: hex::encode(&payload[4..4+32]),
+        merkle_root: hex::encode(&payload[36..36+32]),
+        timestamp: (&payload[68..68+4]).read_u32::<LittleEndian>().unwrap(),
+        bits: (&payload[72..72+4]).read_u32::<LittleEndian>().unwrap(),
+        nonce: (&payload[76..76+4]).read_u32::<LittleEndian>().unwrap(),
+        txns: get_transactions(payload.get(80..).ok_or(ParsingError)?)?
+    })
 }
 
 fn parse_transaction(payload: &[u8]) -> Result<(Transaction, usize), ParsingError> {
