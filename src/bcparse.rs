@@ -59,6 +59,11 @@ pub enum Tx {
     TxInput(TxInput),
     TxOutput(TxOutput)
 }
+enum TxKind {
+    Transaction,
+    // TxInput,
+    // TxOuput
+}
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Witness {
@@ -96,7 +101,7 @@ fn deserialize_hash<'de, D>(d: D) -> Result<String, D::Error> where D: Deseriali
     d.deserialize_string(HashVisitor)
 }
 
-fn get_transactions(payload: &[u8], kind: &str) -> Result<Vec<Tx>, ParsingError> {
+fn get_transactions(payload: &[u8], kind: TxKind) -> Result<Vec<Tx>, ParsingError> {
     let mut offset = 0;
     let (txn_count, off) = get_compact_int(&payload);
     offset += off;
@@ -104,8 +109,7 @@ fn get_transactions(payload: &[u8], kind: &str) -> Result<Vec<Tx>, ParsingError>
     for _ in 0..txn_count {
         let temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
         let (txn, off) = match kind {
-            "main_tx" => parse_transaction(&temp_bytes)?,
-            &_ => (Transaction::default(), 0)
+            TxKind::Transaction => parse_transaction(&temp_bytes)?
         };
         txns.push(Tx::Transaction(txn));
         offset += off;
@@ -122,7 +126,7 @@ pub fn parse_block(payload: &[u8]) -> Result<Block, ParsingError> {
         timestamp: (&payload[68..68+4]).read_u32::<LittleEndian>().unwrap(),
         bits: (&payload[72..72+4]).read_u32::<LittleEndian>().unwrap(),
         nonce: (&payload[76..76+4]).read_u32::<LittleEndian>().unwrap(),
-        txns: get_transactions(payload.get(80..).ok_or(ParsingError)?, "main_tx")?
+        txns: get_transactions(payload.get(80..).ok_or(ParsingError)?, TxKind::Transaction)?
     })
 }
 
