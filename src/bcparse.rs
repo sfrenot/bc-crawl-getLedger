@@ -18,7 +18,7 @@ pub struct Block {
     pub timestamp: u32,
     pub bits: u32,
     pub nonce: u32,
-    pub txns: Vec<Transaction>
+    pub txns: Vec<Tx>
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -51,6 +51,13 @@ pub struct OutPoint {
 pub struct TxOutput {
     pub value: i64,
     pub pub_key_script: String
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub enum Tx {
+    Transaction(Transaction),
+    TxInput(TxInput),
+    TxOutput(TxOutput)
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -89,16 +96,18 @@ fn deserialize_hash<'de, D>(d: D) -> Result<String, D::Error> where D: Deseriali
     d.deserialize_string(HashVisitor)
 }
 
-fn get_transactions(payload: &[u8]) -> Result<Vec<Transaction>, ParsingError> {
-    // let mut temp_bytes;
+fn get_transactions(payload: &[u8], kind: &str) -> Result<Vec<Tx>, ParsingError> {
     let mut offset = 0;
     let (txn_count, off) = get_compact_int(&payload);
     offset += off;
     let mut txns = Vec::new();
     for _ in 0..txn_count {
         let temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-        let (txn, off) = parse_transaction(&temp_bytes)?;
-        txns.push(txn);
+        let (txn, off) = match kind {
+            "main_tx" => parse_transaction(&temp_bytes)?,
+            &_ => (Transaction::default(), 0)
+        };
+        txns.push(Tx::Transaction(txn));
         offset += off;
     };
     Ok(txns)
@@ -113,7 +122,7 @@ pub fn parse_block(payload: &[u8]) -> Result<Block, ParsingError> {
         timestamp: (&payload[68..68+4]).read_u32::<LittleEndian>().unwrap(),
         bits: (&payload[72..72+4]).read_u32::<LittleEndian>().unwrap(),
         nonce: (&payload[76..76+4]).read_u32::<LittleEndian>().unwrap(),
-        txns: get_transactions(payload.get(80..).ok_or(ParsingError)?)?
+        txns: get_transactions(payload.get(80..).ok_or(ParsingError)?, "main_tx")?
     })
 }
 
@@ -133,7 +142,6 @@ fn parse_transaction(payload: &[u8]) -> Result<(Transaction, usize), ParsingErro
     if temp_bytes == &[0x00, 0x01] {
         txn.is_segwit = true;
         offset += 2;
-
         raw_txn.extend_from_slice(&payload[..4]); // if segwit, we create a clean txn for the hash
     }
 
