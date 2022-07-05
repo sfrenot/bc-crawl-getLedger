@@ -28,8 +28,8 @@ pub struct Transaction {
     pub version: i32,
     pub is_segwit: bool,
     pub inputs: Vec<Tx>,
-    pub outputs: Vec<TxOutput>,
-    pub witnesses: Vec<Witness>,
+    pub outputs: Vec<Tx>,
+    pub witnesses: Vec<Vec<Tx>>,
     pub lock_time: u32
 }
 
@@ -53,26 +53,23 @@ pub struct TxOutput {
     pub pub_key_script: String
 }
 
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct WitnessItem {
+    pub script: String
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Tx {
     Transaction(Transaction),
     TxInput(TxInput),
-    TxOutput(TxOutput)
+    TxOutput(TxOutput),
+    WitnessItem(WitnessItem)
 }
 enum TxKind {
     Transaction,
-    TxInput
-    // TxOuput
-}
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct Witness {
-    pub items: Vec<WitnessItem>
-}
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct WitnessItem {
-    pub script: String
+    TxInput,
+    TxOutput,
+    WitnessItem
 }
 
 #[derive(Debug)]
@@ -105,6 +102,7 @@ fn get_transactions(payload: &[u8], kind: TxKind) -> Result<(Vec<Tx>, usize), Pa
     let mut offset = 0;
     let (txn_count, off) = get_compact_int(&payload);
     offset += off;
+
     let mut txns = Vec::new();
     for _ in 0..txn_count {
         let temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
@@ -113,10 +111,20 @@ fn get_transactions(payload: &[u8], kind: TxKind) -> Result<(Vec<Tx>, usize), Pa
                 let (txn, off) = parse_transaction(&temp_bytes)?;
                 txns.push(Tx::Transaction(txn));
                 off
-            }
+            },
             TxKind::TxInput => {
                 let (txn, off) = parse_tx_input(&temp_bytes)?;
                 txns.push(Tx::TxInput(txn));
+                off
+            },
+            TxKind::TxOutput => {
+                let (txn, off) = parse_tx_output(&temp_bytes)?;
+                txns.push(Tx::TxOutput(txn));
+                off
+            },
+            TxKind::WitnessItem => {
+                let (txn, off) = parse_witness_item(&temp_bytes)?;
+                txns.push(Tx::WitnessItem(txn));
                 off
             }
         };
@@ -125,21 +133,7 @@ fn get_transactions(payload: &[u8], kind: TxKind) -> Result<(Vec<Tx>, usize), Pa
     Ok((txns, offset))
 }
 
-pub fn parse_block(payload: &[u8]) -> Result<Block, ParsingError> {
-    return Ok(Block {
-        hash: hex::encode(sha256d::Hash::hash(payload.get(..80).ok_or(ParsingError)?)),
-        version: (&payload[..4]).read_i32::<LittleEndian>().unwrap(),
-        prev_hash: hex::encode(&payload[4..4+32]),
-        merkle_root: hex::encode(&payload[36..36+32]),
-        timestamp: (&payload[68..68+4]).read_u32::<LittleEndian>().unwrap(),
-        bits: (&payload[72..72+4]).read_u32::<LittleEndian>().unwrap(),
-        nonce: (&payload[76..76+4]).read_u32::<LittleEndian>().unwrap(),
-        txns: {
-            let (tx, _) = get_transactions(payload.get(80..).ok_or(ParsingError)?, TxKind::Transaction)?;
-            tx
-        }
-    })
-}
+
 
 fn parse_transaction(payload: &[u8]) -> Result<(Transaction, usize), ParsingError> {
     let mut txn = Transaction::default();
@@ -160,47 +154,24 @@ fn parse_transaction(payload: &[u8]) -> Result<(Transaction, usize), ParsingErro
         raw_txn.extend_from_slice(&payload[..4]); // if segwit, we create a clean txn for the hash
     }
 
-    // // tx_in count
-    // temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-    // let (input_count, off) = get_compact_int(&temp_bytes);
-    // offset += off;
-    //
-    // // parsing tx_in
-    // let mut inputs = Vec::new();
-    // for _ in 0..input_count {
-    //     temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-    //     let (data, off) = parse_tx_input(&temp_bytes)?;
-    //     inputs.push(data);
-    //     offset += off;
-    // };
-    // txn.inputs = inputs;
+    // tx_in
     let off;
     (txn.inputs, off) = get_transactions(payload.get(offset..).ok_or(ParsingError)?, TxKind::TxInput)?;
     offset += off;
 
-    // tx_out count
-    temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-    let (output_count, off) = get_compact_int(&temp_bytes);
+    // tx_out
+    let off;
+    (txn.outputs, off) = get_transactions(payload.get(offset..).ok_or(ParsingError)?, TxKind::TxOutput)?;
     offset += off;
-
-    // parsing tx_out
-    let mut outputs = Vec::new();
-    for _ in 0..output_count {
-        temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-        let (data, off) = parse_tx_output(&temp_bytes)?;
-        outputs.push(data);
-        offset += off;
-    };
-    txn.outputs = outputs;
 
     // parsing segregated witnesses if any
     if txn.is_segwit {
         raw_txn.extend_from_slice(&payload[6..offset]);
 
+        // eprintln!("{:02X?}", &payload[offset..]);
         let mut witnesses = Vec::new();
         for _ in 0..txn.inputs.len() {
-            temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-            let (data, off) = parse_witness(&temp_bytes)?;
+            let (data, off) = get_transactions(&payload[offset..], TxKind::WitnessItem)?;
             witnesses.push(data);
             offset += off;
         };
@@ -225,86 +196,30 @@ fn parse_transaction(payload: &[u8]) -> Result<(Transaction, usize), ParsingErro
 }
 
 fn parse_tx_input(payload: &[u8]) -> Result<(TxInput, usize), ParsingError> {
-    let mut tx_input = TxInput::default();
-    let mut offset = 0;
-    let mut temp_bytes;
+    let (script_length, off) = get_compact_int(&payload[36..]);
+    let script_length = script_length as usize;
+    let start_sig = 36 + off;
+    let start_seq = start_sig + script_length;
 
-    let mut prev_output = OutPoint::default();
-
-    // previous transaction hash
-    temp_bytes = payload.get(..32).ok_or(ParsingError)?;
-    prev_output.hash = hex::encode(temp_bytes);
-    offset += 32;
-
-    // previous transaction output index
-    temp_bytes = payload.get(offset..offset+4).ok_or(ParsingError)?;
-    prev_output.idx = u32::from_le_bytes(temp_bytes.try_into().unwrap());
-    offset += 4;
-
-    tx_input.prev_output = prev_output;
-
-    // script length in bytes
-    temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-    let (script_length, off) = get_compact_int(&temp_bytes);
-    offset += off;
-
-    // signature script
-    temp_bytes = payload.get(offset..offset + (script_length as usize)).ok_or(ParsingError)?;
-    tx_input.signature_script = hex::encode(temp_bytes);
-    offset += script_length as usize;
-
-    // sequence number
-    temp_bytes = payload.get(offset..offset+4).ok_or(ParsingError)?;
-    tx_input.sequence = u32::from_le_bytes(temp_bytes.try_into().unwrap());
-    offset += 4;
-
-    Ok((tx_input, offset))
+    return Ok((TxInput {
+        prev_output: OutPoint {
+            hash: hex::encode(&payload[..32]),
+            idx: (&payload[..32+4]).read_u32::<LittleEndian>().unwrap()
+        },
+        signature_script: hex::encode(&payload[start_sig..start_sig + script_length]),
+        sequence: (&payload[start_seq..start_seq+4]).read_u32::<LittleEndian>().unwrap()
+    }, start_seq + 4));
 }
 
 fn parse_tx_output(payload: &[u8]) -> Result<(TxOutput, usize), ParsingError> {
-    let mut tx_output = TxOutput::default();
-    let mut offset = 0;
-    let mut temp_bytes;
+    let (script_length, off) = get_compact_int(&payload[8..]);
+    let script_length = script_length as usize;
+    let start_pub_key_script = 8+off;
 
-    // value in satoshis
-    temp_bytes = payload.get(..8).ok_or(ParsingError)?;
-    tx_output.value = i64::from_le_bytes(temp_bytes.try_into().unwrap());
-    offset += 8;
-
-    // pubkey script length
-    temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-    let (script_length, off) = get_compact_int(&temp_bytes);
-    offset += off;
-
-    // pubkey script
-    temp_bytes = payload.get(offset..offset + (script_length as usize)).ok_or(ParsingError)?;
-    tx_output.pub_key_script = hex::encode(temp_bytes);
-    offset += script_length as usize;
-
-    Ok((tx_output, offset))
-}
-
-fn parse_witness(payload: &[u8]) -> Result<(Witness, usize), ParsingError> {
-    let mut witness = Witness::default();
-    let mut offset = 0;
-    let mut temp_bytes;
-
-    // witness item count
-    temp_bytes = payload.get(..).ok_or(ParsingError)?;
-    let (item_count, off) = get_compact_int(&temp_bytes);
-    offset += off;
-
-    // parsing items
-    let mut items = Vec::new();
-    for _ in 0..item_count {
-        temp_bytes = payload.get(offset..).ok_or(ParsingError)?;
-        let (txn, off) = parse_witness_item(&temp_bytes)?;
-        items.push(txn);
-        offset += off;
-    };
-    witness.items = items;
-
-    Ok((witness, offset))
+    return Ok((TxOutput{
+        value:(&payload[..8]).read_i64::<LittleEndian>().unwrap(),
+        pub_key_script: hex::encode(&payload[start_pub_key_script..start_pub_key_script+script_length])
+    }, start_pub_key_script+script_length));
 }
 
 fn parse_witness_item(payload: &[u8]) -> Result<(WitnessItem, usize), ParsingError> {
@@ -323,4 +238,21 @@ fn parse_witness_item(payload: &[u8]) -> Result<(WitnessItem, usize), ParsingErr
     offset += length as usize;
 
     Ok((witness_item, offset))
+}
+
+//Public
+pub fn parse_block(payload: &[u8]) -> Result<Block, ParsingError> {
+    return Ok(Block {
+        hash: hex::encode(sha256d::Hash::hash(payload.get(..80).ok_or(ParsingError)?)),
+        version: (&payload[..4]).read_i32::<LittleEndian>().unwrap(),
+        prev_hash: hex::encode(&payload[4..4+32]),
+        merkle_root: hex::encode(&payload[36..36+32]),
+        timestamp: (&payload[68..68+4]).read_u32::<LittleEndian>().unwrap(),
+        bits: (&payload[72..72+4]).read_u32::<LittleEndian>().unwrap(),
+        nonce: (&payload[76..76+4]).read_u32::<LittleEndian>().unwrap(),
+        txns: {
+            let (tx, _) = get_transactions(payload.get(80..).ok_or(ParsingError)?, TxKind::Transaction)?;
+            tx
+        }
+    })
 }
