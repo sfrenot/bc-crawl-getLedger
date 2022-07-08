@@ -223,21 +223,14 @@ fn parse_tx_output(payload: &[u8]) -> Result<(TxOutput, usize), ParsingError> {
 }
 
 fn parse_witness_item(payload: &[u8]) -> Result<(WitnessItem, usize), ParsingError> {
-    let mut witness_item = WitnessItem::default();
-    let mut offset = 0;
-    let mut temp_bytes;
-
     // item script length
-    temp_bytes = payload.get(..).ok_or(ParsingError)?;
-    let (length, off) = get_compact_int(&temp_bytes);
-    offset += off;
-
+    let (length, offset) = get_compact_int(&payload.get(..).ok_or(ParsingError)?);
+    let length = length as usize;
     // item script
-    temp_bytes = payload.get(offset..offset + (length as usize)).ok_or(ParsingError)?;
-    witness_item.script = hex::encode(temp_bytes);
-    offset += length as usize;
-
-    Ok((witness_item, offset))
+    return Ok((WitnessItem{
+        script: hex::encode(payload.get(offset..offset + length).ok_or(ParsingError)?)
+    }
+    , offset+length));
 }
 
 //Public
