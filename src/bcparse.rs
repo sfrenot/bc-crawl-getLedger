@@ -65,6 +65,7 @@ pub enum Tx {
     TxOutput(TxOutput),
     WitnessItem(WitnessItem)
 }
+
 enum TxKind {
     Transaction,
     TxInput,
@@ -133,66 +134,74 @@ fn get_transactions(payload: &[u8], kind: TxKind) -> Result<(Vec<Tx>, usize), Pa
     Ok((txns, offset))
 }
 
-
-
 fn parse_transaction(payload: &[u8]) -> Result<(Transaction, usize), ParsingError> {
-    let mut txn = Transaction::default();
-    let mut offset = 0;
-    let mut temp_bytes;
-    let mut raw_txn = Vec::new();
-
-    // version
-    temp_bytes = payload.get(..4).ok_or(ParsingError)?;
-    txn.version = i32::from_le_bytes(temp_bytes.try_into().unwrap());
-    offset += 4;
-
-    // segwit flag
-    temp_bytes = payload.get(offset..offset+2).ok_or(ParsingError)?;
-    if temp_bytes == &[0x00, 0x01] {
-        txn.is_segwit = true;
-        offset += 2;
-        raw_txn.extend_from_slice(&payload[..4]); // if segwit, we create a clean txn for the hash
-    }
-
-    // tx_in
-    let off;
-    (txn.inputs, off) = get_transactions(payload.get(offset..).ok_or(ParsingError)?, TxKind::TxInput)?;
-    offset += off;
-
-    // tx_out
-    let off;
-    (txn.outputs, off) = get_transactions(payload.get(offset..).ok_or(ParsingError)?, TxKind::TxOutput)?;
-    offset += off;
-
-    // parsing segregated witnesses if any
-    if txn.is_segwit {
-        raw_txn.extend_from_slice(&payload[6..offset]);
-
-        // eprintln!("{:02X?}", &payload[offset..]);
-        let mut witnesses = Vec::new();
-        for _ in 0..txn.inputs.len() {
-            let (data, off) = get_transactions(&payload[offset..], TxKind::WitnessItem)?;
-            witnesses.push(data);
-            offset += off;
-        };
-        txn.witnesses = witnesses;
-    }
-
-    // lock time
-    temp_bytes = payload.get(offset..offset+4).ok_or(ParsingError)?;
-    txn.lock_time = u32::from_le_bytes(temp_bytes.try_into().unwrap());
-    offset += 4;
-
-    // hash
-    txn.hash = match txn.is_segwit {
+    return match payload.get(4..6).ok_or(ParsingError)? == &[0x00, 0x01] {
         true => {
-            raw_txn.extend_from_slice(temp_bytes);
-            hex::encode(sha256d::Hash::hash(&raw_txn))
+            parse_segwit_tx(payload)
         },
-        false => hex::encode(sha256d::Hash::hash(&payload[..offset]))
-    };
+        false => {
+            parse_standard_tx(payload)
+        }
+    }
+}
 
-    Ok((txn, offset))
+fn parse_segwit_tx(payload: &[u8]) -> Result<(Transaction, usize), ParsingError> {
+    let mut offset:usize;
+    let offset_in_out:usize;
+    let len_in:usize;
+
+    return Ok((Transaction{
+        is_segwit: true,
+        version: payload.get(..4).ok_or(ParsingError)?.read_i32::<LittleEndian>().unwrap(),
+        inputs: {
+            offset = 6;
+            let (txn, offset_in) = get_transactions(payload.get(offset..).ok_or(ParsingError)?, TxKind::TxInput)?;
+            len_in = txn.len();
+            offset += offset_in;
+            txn
+        },
+        outputs: {
+            let (txn, offset_out) = get_transactions(payload.get(offset..).ok_or(ParsingError)?, TxKind::TxOutput)?;
+            offset += offset_out;
+            offset_in_out = offset;
+            txn
+        },
+        witnesses: {
+            let mut witnesses = Vec::new();
+            for _ in 0..len_in {
+                let (data, offset_witnesses) = get_transactions(&payload[offset..], TxKind::WitnessItem)?;
+                witnesses.push(data);
+                offset += offset_witnesses;
+            };
+            witnesses
+        },
+        lock_time: payload.get(offset..offset+4).ok_or(ParsingError)?.read_u32::<LittleEndian>().unwrap(),
+        hash: {
+            let second = &[&payload[..4], &payload[6..offset_in_out], &payload[offset..offset+4]].concat();
+            hex::encode(sha256d::Hash::hash(second))
+        }
+    }, offset+4));
+}
+
+fn parse_standard_tx(payload: &[u8]) -> Result<(Transaction, usize), ParsingError> {
+    let mut offset = 4;
+    return Ok((Transaction{
+        is_segwit: false,
+        version: payload.get(..4).ok_or(ParsingError)?.read_i32::<LittleEndian>().unwrap(),
+        inputs: {
+            let (txn, off) = get_transactions(payload.get(offset..).ok_or(ParsingError)?, TxKind::TxInput)?;
+            offset += off;
+            txn
+        },
+        outputs: {
+            let (txn, off) = get_transactions(payload.get(offset..).ok_or(ParsingError)?, TxKind::TxOutput)?;
+            offset += off;
+            txn
+        },
+        witnesses: vec!(),
+        lock_time: payload.get(offset..offset+4).ok_or(ParsingError)?.read_u32::<LittleEndian>().unwrap(),
+        hash: hex::encode(sha256d::Hash::hash(&payload[..offset+4]))
+    }, offset+4));
 }
 
 fn parse_tx_input(payload: &[u8]) -> Result<(TxInput, usize), ParsingError> {
