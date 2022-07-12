@@ -145,16 +145,40 @@ fn parse_transaction(payload: &[u8]) -> Result<(Transaction, usize), ParsingErro
     }
 }
 
+fn read_i32(payload: &[u8], start: usize) -> i32 {
+    payload.get(start..start+4).unwrap().read_i32::<LittleEndian>().unwrap()
+}
+
+fn read_u32(payload: &[u8], start: usize) -> u32 {
+    payload.get(start..start+4).unwrap().read_u32::<LittleEndian>().unwrap()
+}
+
+fn read_i64(payload: &[u8], start: usize) -> i64 {
+    payload.get(start..start+8).unwrap().read_i64::<LittleEndian>().unwrap()
+}
+
+fn encode_sha256d(payload: &[u8]) -> String {
+    hex::encode(sha256d::Hash::hash(payload))
+}
+
+fn encode_addr(payload: &[u8], start:usize) -> String {
+    hex::encode(payload.get(start..start+32).unwrap())
+}
+
+fn encode_string(payload: &[u8], start:usize, stop: usize) -> String {
+    hex::encode(payload.get(start..stop).unwrap())
+}
+
 fn parse_segwit_tx(payload: &[u8]) -> Result<(Transaction, usize), ParsingError> {
-    let mut offset:usize;
+    let mut offset = 4;
     let offset_in_out:usize;
     let len_in:usize;
 
     return Ok((Transaction{
         is_segwit: true,
-        version: payload.get(..4).ok_or(ParsingError)?.read_i32::<LittleEndian>().unwrap(),
+        version: read_i32(payload, 0),
         inputs: {
-            offset = 6;
+            offset += 2;
             let (txn, offset_in) = get_transactions(payload.get(offset..).ok_or(ParsingError)?, TxKind::TxInput)?;
             len_in = txn.len();
             offset += offset_in;
@@ -175,11 +199,8 @@ fn parse_segwit_tx(payload: &[u8]) -> Result<(Transaction, usize), ParsingError>
             };
             witnesses
         },
-        lock_time: payload.get(offset..offset+4).ok_or(ParsingError)?.read_u32::<LittleEndian>().unwrap(),
-        hash: {
-            let second = &[&payload[..4], &payload[6..offset_in_out], &payload[offset..offset+4]].concat();
-            hex::encode(sha256d::Hash::hash(second))
-        }
+        lock_time: read_u32(payload, offset),
+        hash: encode_sha256d(&[&payload[..4], &payload[6..offset_in_out], &payload[offset..offset+4]].concat())
     }, offset+4));
 }
 
@@ -187,7 +208,7 @@ fn parse_standard_tx(payload: &[u8]) -> Result<(Transaction, usize), ParsingErro
     let mut offset = 4;
     return Ok((Transaction{
         is_segwit: false,
-        version: payload.get(..4).ok_or(ParsingError)?.read_i32::<LittleEndian>().unwrap(),
+        version: read_i32(payload, 0),
         inputs: {
             let (txn, off) = get_transactions(payload.get(offset..).ok_or(ParsingError)?, TxKind::TxInput)?;
             offset += off;
@@ -199,8 +220,8 @@ fn parse_standard_tx(payload: &[u8]) -> Result<(Transaction, usize), ParsingErro
             txn
         },
         witnesses: vec!(),
-        lock_time: payload.get(offset..offset+4).ok_or(ParsingError)?.read_u32::<LittleEndian>().unwrap(),
-        hash: hex::encode(sha256d::Hash::hash(&payload[..offset+4]))
+        lock_time: read_u32(payload, offset),
+        hash: encode_sha256d(&payload[..offset+4])
     }, offset+4));
 }
 
@@ -212,11 +233,11 @@ fn parse_tx_input(payload: &[u8]) -> Result<(TxInput, usize), ParsingError> {
 
     return Ok((TxInput {
         prev_output: OutPoint {
-            hash: hex::encode(&payload[..32]),
-            idx: (&payload[..32+4]).read_u32::<LittleEndian>().unwrap()
+            hash: encode_addr(payload, 0),
+            idx: read_u32(payload, 32)
         },
-        signature_script: hex::encode(&payload[start_sig..start_sig + script_length]),
-        sequence: (&payload[start_seq..start_seq+4]).read_u32::<LittleEndian>().unwrap()
+        signature_script: encode_string(payload, start_sig, (start_sig + script_length)),
+        sequence: read_u32(payload, start_seq)
     }, start_seq + 4));
 }
 
@@ -226,8 +247,8 @@ fn parse_tx_output(payload: &[u8]) -> Result<(TxOutput, usize), ParsingError> {
     let start_pub_key_script = 8+off;
 
     return Ok((TxOutput{
-        value:(&payload[..8]).read_i64::<LittleEndian>().unwrap(),
-        pub_key_script: hex::encode(&payload[start_pub_key_script..start_pub_key_script+script_length])
+        value:read_i64(payload, 0),
+        pub_key_script: encode_string(payload, start_pub_key_script, start_pub_key_script+script_length)
     }, start_pub_key_script+script_length));
 }
 
@@ -237,7 +258,7 @@ fn parse_witness_item(payload: &[u8]) -> Result<(WitnessItem, usize), ParsingErr
     let length = length as usize;
     // item script
     return Ok((WitnessItem{
-        script: hex::encode(payload.get(offset..offset + length).ok_or(ParsingError)?)
+        script: encode_string(payload, offset, offset + length)
     }
     , offset+length));
 }
@@ -245,13 +266,13 @@ fn parse_witness_item(payload: &[u8]) -> Result<(WitnessItem, usize), ParsingErr
 //Public
 pub fn parse_block(payload: &[u8]) -> Result<Block, ParsingError> {
     return Ok(Block {
-        hash: hex::encode(sha256d::Hash::hash(payload.get(..80).ok_or(ParsingError)?)),
-        version: (&payload[..4]).read_i32::<LittleEndian>().unwrap(),
-        prev_hash: hex::encode(&payload[4..4+32]),
-        merkle_root: hex::encode(&payload[36..36+32]),
-        timestamp: (&payload[68..68+4]).read_u32::<LittleEndian>().unwrap(),
-        bits: (&payload[72..72+4]).read_u32::<LittleEndian>().unwrap(),
-        nonce: (&payload[76..76+4]).read_u32::<LittleEndian>().unwrap(),
+        hash: encode_sha256d(payload.get(..80).ok_or(ParsingError)?),
+        version: read_i32(payload, 0),
+        prev_hash: encode_addr(payload, 4),
+        merkle_root: encode_addr(payload, 36),
+        timestamp: read_u32(payload, 68),
+        bits: read_u32(payload, 72),
+        nonce: read_u32(payload, 76),
         txns: {
             let (tx, _) = get_transactions(payload.get(80..).ok_or(ParsingError)?, TxKind::Transaction)?;
             tx
