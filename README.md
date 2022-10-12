@@ -23,8 +23,6 @@ for other operation sistem check [rust site](https://www.rust-lang.org/learn/get
 
 
 ## Running
-Au premier démarrage copier blocks.genesis.json -> blocks.json
-
 Lancer directement `cargo run`
 
 BUGS :
