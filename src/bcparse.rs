@@ -139,17 +139,17 @@ fn tx_hash(tx: &Payload, from: usize) -> String {
     hex::encode(sha256d::Hash::hash(&tx.pl[from..tx.off]))
 }
 
-fn segwit_hash(raw_tx: &Payload, from: usize, txs_offset: usize) -> String {
+fn segwit_hash(tx: &Payload, from: usize, txs_offset: usize) -> String {
 
-    let tmp = &[&raw_tx.pl[from..from+4],
-          &raw_tx.pl[from+6..txs_offset],
-          &raw_tx.pl[raw_tx.off-4..raw_tx.off]].concat();
+    let tmp = &[&tx.pl[from..from+4],
+          &tx.pl[from+6..txs_offset],
+          &tx.pl[tx.off-4..tx.off]].concat();
 
     hex::encode(sha256d::Hash::hash(tmp))
 }
 
-fn is_segwit(raw_tx: &Payload) -> bool {
-    raw_tx.pl.get(raw_tx.off+4..raw_tx.off+6).ok_or(ParsingError).unwrap() == &[0x00, 0x01]
+fn is_segwit(tx: &Payload) -> bool {
+    tx.pl.get(tx.off+4..tx.off+6).ok_or(ParsingError).unwrap() == &[0x00, 0x01]
 }
 
 fn tx_loop(txns_pl: &mut Payload, txn_count: usize, kind: TxKind) -> Vec<Tx> {
