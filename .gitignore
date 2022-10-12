@@ -2,3 +2,5 @@ target
 file.txt
 Cargo.lock
 blocks**
+headers.lst
+headers_to_update_from_getblocks.lst
