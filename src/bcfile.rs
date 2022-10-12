@@ -132,10 +132,10 @@ pub fn store_block(block_channel: Receiver<Block>) {
 
         // eprintln!("Storing {}",block.hash);
         let rev_hash = reverse_hash(&block.hash);
-        let dir_path = format!("./{}/{}", BLOCKS_DIR, &rev_hash[rev_hash.len()-3..]);
+        let dir_path = format!("./{}/{}/{}", BLOCKS_DIR, &rev_hash[rev_hash.len()-2..], &rev_hash[rev_hash.len()-4..rev_hash.len()-2]);
         fs::create_dir_all(&dir_path).unwrap();
 
-        let file = File::create(format!("{}/{}.json.gz", dir_path, &rev_hash[..rev_hash.len()-3])).unwrap();
+        let file = File::create(format!("{}/{}.json.gz", dir_path, &rev_hash[..rev_hash.len()-4])).unwrap();
         let mut gz = GzBuilder::new()
                     .write(file, Compression::default());
         gz.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
@@ -145,6 +145,7 @@ pub fn store_block(block_channel: Receiver<Block>) {
         out.write_all(rev_hash.as_bytes()).unwrap();
         out.write_all(b"\n").unwrap();
         out.flush().unwrap();
+        // std::process::exit(1);
     }
 }
 
