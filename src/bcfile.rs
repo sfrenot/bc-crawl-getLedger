@@ -52,6 +52,7 @@ fn read_block_file_at_startup() -> String {
 
 fn create_internal_struct_at_startup(headers: String) {
     eprintln!("Début création structures");
+    eprintln!("\t");
     let mut idx: usize = 1;
     let mut previous: String = "".to_string();
     let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
