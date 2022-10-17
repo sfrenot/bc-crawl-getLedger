@@ -46,7 +46,7 @@ fn read_block_file_at_startup() -> String {
         fs::copy(HEADERS_GENESIS_FILE, HEADERS_FILE).unwrap();
     }
     let hdrs = read_to_string(HEADERS_FILE).unwrap();
-    eprintln!("Début lecture fichier headers");
+    eprintln!("Fin lecture fichier headers");
     return hdrs;
 }
 
@@ -72,7 +72,7 @@ fn create_internal_struct_at_startup(headers: String) {
         previous = reversed;
         idx += 1;
     }
-     eprintln!("Fin création structures");
+     eprintln!("\nFin création structures");
 }
 
 fn inject_downloaded_headers_from_previous_run_at_startup() {
@@ -108,7 +108,7 @@ pub fn load_headers_at_startup() {
 }
 
 fn update_headers_file(headers: &Vec<(String, bool, bool, bool)>) {
-    eprintln!("Début création nouveau fichier Headers");
+    eprintln!("\tDébut création nouveau fichier Headers");
 
     let mut file = LineWriter::new(File::create(HEADERS_TEMP_FILE).unwrap());
     let mut idx = 0;
@@ -122,7 +122,7 @@ fn update_headers_file(headers: &Vec<(String, bool, bool, bool)>) {
     }
     file.flush().unwrap();
     fs::rename(HEADERS_TEMP_FILE, HEADERS_FILE).unwrap();
-    eprintln!("Fin création nouveau fichier Headers");
+    eprintln!("\tFin création nouveau fichier Headers");
 }
 
 pub fn store_headers(headers: Vec<String>) {
