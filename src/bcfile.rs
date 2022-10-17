@@ -45,7 +45,8 @@ fn read_block_file_at_startup() -> String {
     if !Path::new(HEADERS_FILE).exists() {
         fs::copy(HEADERS_GENESIS_FILE, HEADERS_FILE).unwrap();
     }
-    read_to_string(HEADERS_FILE).unwrap()
+    read_to_string(HEADERS_FILE).unwrap();
+    eprintln!("Début lecture fichier headers");
 }
 
 fn create_internal_struct_at_startup(headers: String) {
@@ -70,10 +71,11 @@ fn create_internal_struct_at_startup(headers: String) {
         previous = reversed;
         idx += 1;
     }
+            eprintln!("Fin création structures");
 }
 
 fn inject_downloaded_headers_from_previous_run_at_startup() {
-    eprintln!("Lecture fichier temporaire des blocks chargés");
+    eprintln!("Début Lecture fichier temporaire des blocks chargés");
     let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
     let reader = BufReader::new(OpenOptions::new().append(true).read(true).create(true).open(Path::new(UPDATED_HEADERS_FROM_GETBLOCK)).unwrap());
 
@@ -94,6 +96,7 @@ fn inject_downloaded_headers_from_previous_run_at_startup() {
     }
     update_headers_file(&blocks_mutex_guard.blocks_id);
     HEADERS_FROM_DOWNLOADED_BLOCKS.lock().unwrap().set_len(0).unwrap();
+    eprintln!("Fin Lecture fichier temporaire des blocks chargés");
 }
 
 pub fn load_headers_at_startup() {
@@ -104,6 +107,8 @@ pub fn load_headers_at_startup() {
 }
 
 fn update_headers_file(headers: &Vec<(String, bool, bool, bool)>) {
+    eprintln!("Début création nouveau fichier Headers");
+
     let mut file = LineWriter::new(File::create(HEADERS_TEMP_FILE).unwrap());
     let mut idx = 0;
     for (hash, next, downloaded, _) in headers {
@@ -116,6 +121,7 @@ fn update_headers_file(headers: &Vec<(String, bool, bool, bool)>) {
     }
     file.flush().unwrap();
     fs::rename(HEADERS_TEMP_FILE, HEADERS_FILE).unwrap();
+    eprintln!("Fin création nouveau fichier Headers");
 }
 
 pub fn store_headers(headers: Vec<String>) {
@@ -132,6 +138,7 @@ pub fn store_block(block_channel: Receiver<Block>) {
 
         // eprintln!("Storing {}",block.hash);
         let rev_hash = reverse_hash(&block.hash);
+        // 0000012345 --> 45/23/000001.json.gz
         let dir_path = format!("./{}/{}/{}", BLOCKS_DIR, &rev_hash[rev_hash.len()-2..], &rev_hash[rev_hash.len()-4..rev_hash.len()-2]);
         fs::create_dir_all(&dir_path).unwrap();
 
