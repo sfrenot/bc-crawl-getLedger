@@ -45,8 +45,9 @@ fn read_block_file_at_startup() -> String {
     if !Path::new(HEADERS_FILE).exists() {
         fs::copy(HEADERS_GENESIS_FILE, HEADERS_FILE).unwrap();
     }
-    read_to_string(HEADERS_FILE).unwrap();
+    let hdrs = read_to_string(HEADERS_FILE).unwrap();
     eprintln!("Début lecture fichier headers");
+    return hdrs;
 }
 
 fn create_internal_struct_at_startup(headers: String) {
@@ -71,7 +72,7 @@ fn create_internal_struct_at_startup(headers: String) {
         previous = reversed;
         idx += 1;
     }
-            eprintln!("Fin création structures");
+     eprintln!("Fin création structures");
 }
 
 fn inject_downloaded_headers_from_previous_run_at_startup() {
