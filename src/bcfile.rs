@@ -8,12 +8,14 @@ use std::sync::Mutex;
 use crate::bcblocks;
 use chrono::{DateTime, Utc};
 use crate::bcparse::Block;
-use fs_extra::dir::get_dir_content;
+//use fs_extra::dir::get_dir_content;
 use linecount::count_lines;
 use flate2::Compression;
 use flate2::GzBuilder;
 use std::sync::mpsc::Receiver;
 use crate::bcutils::reverse_hash;
+//use std::thread;
+//use std::time::Duration;
 
 const BLOCKS_DIR: &str = "./blocks";
 const HEADERS_FILE: &str = "./headers.lst";
@@ -52,7 +54,7 @@ fn read_block_file_at_startup() -> String {
 
 fn create_internal_struct_at_startup(headers: String) {
     eprintln!("Début création structures");
-    eprintln!("\t");
+    eprint!("  ");
     let mut idx: usize = 1;
     let mut previous: String = "".to_string();
     let mut blocks_mutex_guard = bcblocks::BLOCKS_MUTEX.lock().unwrap();
@@ -109,7 +111,7 @@ pub fn load_headers_at_startup() {
 }
 
 fn update_headers_file(headers: &Vec<(String, bool, bool, bool)>) {
-    eprintln!("\tDébut création nouveau fichier Headers");
+    eprintln!("  Début création nouveau fichier Headers");
 
     let mut file = LineWriter::new(File::create(HEADERS_TEMP_FILE).unwrap());
     let mut idx = 0;
@@ -155,6 +157,8 @@ pub fn store_block(block_channel: Receiver<Block>) {
         out.write_all(b"\n").unwrap();
         out.flush().unwrap();
         // std::process::exit(1);
+	//eprintln!("Sleep 5min ecriture");
+	//thread::sleep(Duration::from_secs(300));
     }
 }
 
@@ -184,6 +188,10 @@ pub fn store_version_message(target_address: &String, (_, _, _, _): (u32, Vec<u8
     store_event(&msg);
 }
 
+/* Too slowwwwww : Commented out */
+//pub fn get_vols() -> (usize, usize){
+//    (count_lines(File::open(HEADERS_FILE).unwrap()).unwrap(), get_dir_content(BLOCKS_DIR).unwrap().files.len())
+//}
 pub fn get_vols() -> (usize, usize){
-    (count_lines(File::open(HEADERS_FILE).unwrap()).unwrap(), get_dir_content(BLOCKS_DIR).unwrap().files.len())
+    (count_lines(File::open(HEADERS_FILE).unwrap()).unwrap(),count_lines(File::open(UPDATED_HEADERS_FROM_GETBLOCK).unwrap()).unwrap())
 }

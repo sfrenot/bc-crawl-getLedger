@@ -4,3 +4,4 @@ Cargo.lock
 blocks**
 headers.lst
 headers_to_update_from_getblocks.lst
+.DS_Store
