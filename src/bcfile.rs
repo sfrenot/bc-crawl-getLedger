@@ -140,7 +140,10 @@ pub fn store_headers(headers: Vec<String>) {
 pub fn store_block(block_channel: Receiver<Block>) {
     for block in block_channel.iter() {
 
-        // eprintln!("Storing {}",block.hash);
+        //eprintln!("Storing {}",block.hash);
+        eprint!(".");
+        io::stderr().flush().unwrap();
+	
         let rev_hash = reverse_hash(&block.hash);
         // 0000012345 --> 45/23/000001.json.gz
         let dir_path = format!("./{}/{}/{}", BLOCKS_DIR, &rev_hash[rev_hash.len()-2..], &rev_hash[rev_hash.len()-4..rev_hash.len()-2]);

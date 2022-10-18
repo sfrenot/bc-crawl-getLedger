@@ -91,7 +91,7 @@ fn check_pool_size(start_time: SystemTime ){
         // eprintln!("Nombre de block {} dont {} chargés", memory.len(), tot_downloaded);
 
         unsafe {
-            eprintln!("Total: {} nodes\t -> TBD: {}, Done: {}, Fail: {}, Connectés/Data: {}/{}", total, other, done, failed, bcnet::NB_NOEUDS_CONNECTES.lock().unwrap().len(), THREADS);
+            eprintln!("\nTotal: {} nodes\t -> TBD: {}, Done: {}, Fail: {}, Connectés/Data: {}/{}", total, other, done, failed, bcnet::NB_NOEUDS_CONNECTES.lock().unwrap().len(), THREADS);
             eprintln!("{}s Volume / Speed\t\t -> Missing Headers : {}-{}/s,  Downloaded Blocks : {}-{}/s différence {}", duree, headers, (headers-LAST_VOL_HEADERS)/duree as usize, blocks, (blocks-LAST_VOL_BLOCKS_DIR)/duree as usize, blocks-LAST_VOL_BLOCKS_DIR as usize);
             LAST_VOL_HEADERS = headers;
             LAST_VOL_BLOCKS_DIR = blocks;
