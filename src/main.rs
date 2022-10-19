@@ -1,4 +1,3 @@
-// mod bcmessage;
 mod bcblocks;
 mod bcfile;
 mod bcnet;
@@ -17,6 +16,8 @@ use std::sync::atomic::Ordering;
 use std::thread;
 use std::process;
 
+use jemalloc_ctl::{stats, epoch};
+
 use std::time::{Duration, SystemTime};
 const CHECK_TERMINATION_TIMEOUT: Duration = Duration::from_secs(5);
 const THREADS: u8 = 5;
@@ -28,7 +29,11 @@ const LOG_FILE: &str = "./file.txt";
 pub static mut LAST_VOL_BLOCKS_DIR: usize = 0;
 pub static mut LAST_VOL_HEADERS: usize = 0;
 
+#[global_allocator]
+static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 fn main() {
+
     bcscript::main();
 
     bcfile::open_logfile(LOG_FILE);
@@ -73,8 +78,13 @@ fn main() {
     }
 }
 
-fn check_pool_size(start_time: SystemTime ){
+fn check_pool_size(start_time: SystemTime){
     loop {
+        epoch::advance().unwrap();
+        let allocated = stats::allocated::read().unwrap();
+        let resident = stats::resident::read().unwrap();
+        println!("{} MB bytes allocated/{} MB resident", allocated / (1024*1024), resident/ (1024*1024));
+
         let now = SystemTime::now();
         thread::sleep(CHECK_TERMINATION_TIMEOUT);
         let (total, other, done, failed) = bcpeers::get_peers_status();

@@ -218,7 +218,6 @@ fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize, block_s
                     eprintln!("Error processing block message: Parsing Error");
                     false
                 },
-
                 bcmessage::ProcessBlockMessageError::BlockAlreadyDownloaded => {
                     true
                 }
