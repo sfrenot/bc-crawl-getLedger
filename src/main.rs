@@ -34,7 +34,7 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 fn main() {
 
-    bcscript::main();
+    //bcscript::main();
 
     bcfile::open_logfile(LOG_FILE);
     bcfile::load_headers_at_startup();
