@@ -2,8 +2,8 @@ use std::fmt;
 
 use bitcoin_hashes::{Hash, sha256d};
 use byteorder::{LittleEndian, ReadBytesExt};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{Error, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::bcutils::{get_compact_int, reverse_hash};
 
@@ -22,6 +22,36 @@ pub struct Block {
     pub txns: Vec<Transaction>,
 }
 
+impl fmt::Display for Block {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{
+  \"hash\": \"{}\",
+  \"version\": {},
+  \"prev_hash\": \"{}\",
+  \"merkle_root\": \"{}\",
+  \"timestamp\": {},
+  \"bits\": {},
+  \"nonce\": {},
+  \"txns\": [
+", 
+    reverse_hash(&self.hash), 
+    self.version, 
+    reverse_hash(&self.prev_hash),
+    reverse_hash(&self.merkle_root),
+    self.timestamp,
+    self.bits,
+    self.nonce
+    )?;
+    for v in &self.txns {
+        write!(f, "    {},\n    ", v)?;
+    }
+    write!(f, "
+             ]
+}}\n")?;
+    Ok(())
+    }
+}
+
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Transaction {
     #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
@@ -32,6 +62,18 @@ pub struct Transaction {
     pub outputs: Vec<TxOutput>,
     pub witnesses: Vec<Vec<WitnessItem>>,
     pub lock_time: u32,
+}
+
+impl fmt::Display for Transaction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{
+  \"hash\": \"{}\",
+  \"version\": {}
+    }}", 
+    reverse_hash(&self.hash), 
+    self.version, 
+    )
+    }
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]

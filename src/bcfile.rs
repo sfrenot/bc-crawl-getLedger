@@ -140,8 +140,8 @@ pub fn store_headers(headers: Vec<String>) {
 pub fn store_block(block_channel: Receiver<Block>) {
     for block in block_channel.iter() {
 
-        // eprintln!("Storing {}",block.hash);
-        eprint!(".");
+        eprintln!("Storing {}",block.hash);
+        // eprint!(".");
         io::stderr().flush().unwrap();
 	
         let rev_hash = reverse_hash(&block.hash);
@@ -158,7 +158,8 @@ pub fn store_block(block_channel: Receiver<Block>) {
         // gz.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
         // gz.write_all(format!("{:?}", &block).as_bytes()).unwrap();
         // gz.write_fmt(format_args!("{}", serde_json::ser::to_string_pretty(&block).unwrap())).unwrap();
-        gz.write_all(&serde_json::ser::to_vec_pretty(&block).unwrap()).unwrap();
+        //gz.write_all(&serde_json::ser::to_vec_pretty(&block).unwrap()).unwrap();
+        gz.write_fmt(format_args!("{}", &block)).unwrap();
 
         gz.finish().unwrap();
 
@@ -167,7 +168,7 @@ pub fn store_block(block_channel: Receiver<Block>) {
         out.write_all(b"\n").unwrap();
         out.flush().unwrap();
 
-        // std::process::exit(1);
+        std::process::exit(1);
 	//eprintln!("Sleep 5min ecriture");
 	//thread::sleep(Duration::from_secs(300));
     }
