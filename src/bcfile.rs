@@ -140,7 +140,7 @@ pub fn store_headers(headers: Vec<String>) {
 pub fn store_block(block_channel: Receiver<Block>) {
     for block in block_channel.iter() {
 
-        //eprintln!("Storing {}",block.hash);
+        // eprintln!("Storing {}",block.hash);
         eprint!(".");
         io::stderr().flush().unwrap();
 	
@@ -152,13 +152,21 @@ pub fn store_block(block_channel: Receiver<Block>) {
         let file = File::create(format!("{}/{}.json.gz", dir_path, &rev_hash[..rev_hash.len()-4])).unwrap();
         let mut gz = GzBuilder::new()
                     .write(file, Compression::default());
-        gz.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
+        // eprintln!("{:?}", &block);
+        // std::process::exit(1);
+
+        // gz.write_all(serde_json::to_string_pretty(&block).unwrap().as_bytes()).unwrap();
+        // gz.write_all(format!("{:?}", &block).as_bytes()).unwrap();
+        // gz.write_fmt(format_args!("{}", serde_json::ser::to_string_pretty(&block).unwrap())).unwrap();
+        gz.write_all(&serde_json::ser::to_vec_pretty(&block).unwrap()).unwrap();
+
         gz.finish().unwrap();
 
         let mut out = HEADERS_FROM_DOWNLOADED_BLOCKS.lock().unwrap();
         out.write_all(rev_hash.as_bytes()).unwrap();
         out.write_all(b"\n").unwrap();
         out.flush().unwrap();
+
         // std::process::exit(1);
 	//eprintln!("Sleep 5min ecriture");
 	//thread::sleep(Duration::from_secs(300));
