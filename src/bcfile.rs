@@ -161,8 +161,7 @@ pub fn store_block(block_channel: Receiver<Block>) {
         //gz.write_all(&serde_json::ser::to_vec_pretty(&block).unwrap()).unwrap();
         //gz.write_fmt(format_args!("{}", &block)).unwrap();
         gz.write_all(&block.to_json(0).unwrap()).unwrap();
-        println!("\n{}", String::from_utf8(block.to_json(0).unwrap()).unwrap());
-
+        // println!("\n{}", String::from_utf8(block.to_json(0).unwrap()).unwrap());
         gz.finish().unwrap();
 
         let mut out = HEADERS_FROM_DOWNLOADED_BLOCKS.lock().unwrap();
@@ -170,7 +169,7 @@ pub fn store_block(block_channel: Receiver<Block>) {
         out.write_all(b"\n").unwrap();
         out.flush().unwrap();
 
-        std::process::exit(1);
+        // std::process::exit(1);
 	//eprintln!("Sleep 5min ecriture");
 	//thread::sleep(Duration::from_secs(300));
     }
