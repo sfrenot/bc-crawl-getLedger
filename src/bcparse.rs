@@ -1,8 +1,10 @@
+use std::error::Error;
 use std::fmt;
-
+use std::io::Write;
 use bitcoin_hashes::{Hash, sha256d};
 use byteorder::{LittleEndian, ReadBytesExt};
-use serde::de::{Error, Visitor};
+use indoc::writedoc;
+use serde::de::{Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::bcutils::{get_compact_int, reverse_hash};
@@ -22,33 +24,42 @@ pub struct Block {
     pub txns: Vec<Transaction>,
 }
 
-impl fmt::Display for Block {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{{
-  \"hash\": \"{}\",
-  \"version\": {},
-  \"prev_hash\": \"{}\",
-  \"merkle_root\": \"{}\",
-  \"timestamp\": {},
-  \"bits\": {},
-  \"nonce\": {},
-  \"txns\": [
-", 
-    reverse_hash(&self.hash), 
-    self.version, 
-    reverse_hash(&self.prev_hash),
-    reverse_hash(&self.merkle_root),
-    self.timestamp,
-    self.bits,
-    self.nonce
-    )?;
-    for v in &self.txns {
-        write!(f, "    {},\n    ", v)?;
-    }
-    write!(f, "
-             ]
-}}\n")?;
-    Ok(())
+impl Block {
+    pub(crate) fn to_json(&self, indent_level: usize) -> Result<Vec<u8>, Box<dyn Error>> {
+        let mut result = Vec::new();
+        writedoc!(result, r#"
+            {i}{{
+              {i}"hash": "{}",
+              {i}"version": {},
+              {i}"prev_hash": "{}",
+              {i}"merkle_root": "{}",
+              {i}"timestamp": {},
+              {i}"bits": {},
+              {i}"nonce": {},
+              {i}"txns": [
+            "#,
+            reverse_hash(&self.hash),
+            self.version,
+            reverse_hash(&self.prev_hash),
+            reverse_hash(&self.merkle_root),
+            self.timestamp,
+            self.bits,
+            self.nonce,
+            i = " ".repeat(2 * indent_level)
+        )?;
+
+        for tx in &self.txns {
+            result.append(&mut tx.to_json(indent_level + 2).unwrap())
+        }
+
+        writedoc!(result, r#"
+              {i}]
+            {i}}}
+            "#,
+            i = " ".repeat(2 * indent_level)
+        )?;
+
+        Ok(result)
     }
 }
 
@@ -64,15 +75,75 @@ pub struct Transaction {
     pub lock_time: u32,
 }
 
-impl fmt::Display for Transaction {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{{
-  \"hash\": \"{}\",
-  \"version\": {}
-    }}", 
-    reverse_hash(&self.hash), 
-    self.version, 
-    )
+impl Transaction {
+    fn to_json(&self, indent_level: usize) -> Result<Vec<u8>, Box<dyn Error>> {
+        let mut result = Vec::new();
+
+        writedoc!(result, r#"
+            {i}{{
+              {i}"hash": "{}",
+              {i}"version": {},
+              {i}"is_segwit": {},
+              {i}"inputs": [
+            "#,
+            reverse_hash(&self.hash),
+            self.version,
+            self.is_segwit,
+            i = " ".repeat(2 * indent_level)
+        )?;
+
+        for input in &self.inputs {
+            result.append(&mut input.to_json(indent_level + 2).unwrap())
+        };
+
+        writedoc!(result, r#"
+            {i}],
+            {i}"outputs": [
+            "#,
+            i = " ".repeat(2 * indent_level + 2)
+        )?;
+
+        for output in &self.outputs {
+            result.append(&mut output.to_json(indent_level + 2).unwrap())
+        };
+
+        writedoc!(result, r#"
+            {i}],
+            "#, i = " ".repeat(2 * indent_level + 2))?;
+
+        if !self.witnesses.is_empty() {
+            writedoc!(result, r#"{i}"witnesses": ["#, i = " ".repeat(2 * indent_level + 2))?;
+
+            for witness in &self.witnesses {
+                writedoc!(result, r#"{i}{{"#, i = " ".repeat(2 * indent_level + 4))?;
+                for item in witness {
+                    writedoc!(result, r#"
+                        {i}{{
+                        {i}"script": {},
+                        {i}}},
+                        "#,
+                        item.script,
+                        i = " ".repeat(2 * indent_level + 6)
+                    )?;
+                }
+                writedoc!(result, r#"
+                    {i}}},
+                    "#, i = " ".repeat(2 * indent_level + 4))?;
+            };
+            writedoc!(result, r#"
+                {i}]
+                "#, i = " ".repeat(2 * indent_level + 2))?;
+        }
+
+        writedoc!(result, r#"
+              {i}"lock_time": {}
+            {i}}},
+            "#,
+            self.lock_time,
+            i = " ".repeat(2 * indent_level)
+        )?;
+
+        Ok(result)
     }
 }
 
@@ -81,6 +152,29 @@ pub struct TxInput {
     pub prev_output: OutPoint,
     pub signature_script: String,
     pub sequence: u32,
+}
+
+impl TxInput {
+    fn to_json(&self, indent_level: usize) -> Result<Vec<u8>, Box<dyn Error>> {
+        let mut result = Vec::new();
+        writedoc!(result, r#"
+                {i}{{
+                  {i}"prev_output": {{
+                    {i}"hash": "{}",
+                    {i}"idx": {},
+                  {i}}},
+                  {i}"signature_script": "{}",
+                  {i}"sequence": {},
+                {i}}},
+                "#,
+                reverse_hash(&self.prev_output.hash),
+                self.prev_output.idx,
+                self.signature_script,
+                self.sequence,
+                i = " ".repeat(2 * indent_level)
+            )?;
+        Ok(result)
+    }
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -94,6 +188,23 @@ pub struct OutPoint {
 pub struct TxOutput {
     pub value: i64,
     pub pub_key_script: String,
+}
+
+impl TxOutput {
+    fn to_json(&self, indent_level: usize) -> Result<Vec<u8>, Box<dyn Error>> {
+        let mut result = Vec::new();
+        writedoc!(result, r#"
+                {i}{{
+                  {i}"value": {},
+                  {i}"pub_key_script": "{}",
+                {i}}},
+                "#,
+                self.value,
+                self.pub_key_script,
+                i = " ".repeat(2 * indent_level)
+            )?;
+        Ok(result)
+    }
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
