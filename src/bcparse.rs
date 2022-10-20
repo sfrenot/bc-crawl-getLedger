@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::fmt;
+use std::fmt::{Display, Formatter};
 use std::io::Write;
 use bitcoin_hashes::{Hash, sha256d};
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -22,6 +23,28 @@ pub struct Block {
     pub bits: u32,
     pub nonce: u32,
     pub txns: Vec<Transaction>,
+}
+
+impl Display for Block {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, r#"{{"hash": "{}", "version": {}, "prev_hash": "{}", "merkle_root": "{}", "timestamp": {}, "bits": {}, "nonce": {}, "txns": ["#,
+               reverse_hash(&self.hash),
+               self.version,
+               reverse_hash(&self.prev_hash),
+               reverse_hash(&self.merkle_root),
+               self.timestamp,
+               self.bits,
+               self.nonce,)?;
+
+        for i in 0..self.txns.len() {
+            write!(f, "{}", self.txns[i])?;
+            if i < self.txns.len() - 1 {
+                write!(f, ", ")?;
+            }
+        }
+
+        write!(f, "]}}")
+    }
 }
 
 impl Block {
@@ -75,6 +98,51 @@ pub struct Transaction {
     pub lock_time: u32,
 }
 
+impl Display for Transaction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, r#"{{"hash": "{}", "version": {}, "is_segwit": {}, "inputs": ["#,
+               reverse_hash(&self.hash),
+               self.version,
+               self.is_segwit)?;
+
+        for i in 0..self.inputs.len() {
+            write!(f, "{}", self.inputs[i])?;
+            if i < self.inputs.len() - 1 {
+                write!(f, ", ")?;
+            }
+        }
+
+        write!(f, r#"], "outputs": ["#)?;
+
+        for i in 0..self.outputs.len() {
+            write!(f, "{}", self.outputs[i])?;
+            if i < self.outputs.len() - 1 {
+                write!(f, ", ")?;
+            }
+        }
+
+        write!(f, r#"], "witnesses": ["#)?;
+
+        for i in 0..self.witnesses.len() {
+            write!(f, "[")?;
+
+            for j in 0..self.witnesses[i].len() {
+                write!(f, r#"{{"script": "{}"}}"#, self.witnesses[i][j].script)?;
+                if j < self.witnesses[i].len() - 1 {
+                    write!(f, ", ")?;
+                }
+            }
+            write!(f, "]")?;
+
+            if i < self.witnesses.len() - 1 {
+                write!(f, ", ")?;
+            }
+        }
+
+        write!(f, r#"], "lock_time": {}}}"#, self.lock_time)
+    }
+}
+
 impl Transaction {
     fn to_json(&self, indent_level: usize) -> Result<Vec<u8>, Box<dyn Error>> {
         let mut result = Vec::new();
@@ -115,11 +183,11 @@ impl Transaction {
             writedoc!(result, r#"{i}"witnesses": ["#, i = " ".repeat(2 * indent_level + 2))?;
 
             for witness in &self.witnesses {
-                writedoc!(result, r#"{i}{{"#, i = " ".repeat(2 * indent_level + 4))?;
+                writedoc!(result, r#"{i}["#, i = " ".repeat(2 * indent_level + 4))?;
                 for item in witness {
                     writedoc!(result, r#"
                         {i}{{
-                        {i}"script": {},
+                        {i}"script": {}
                         {i}}},
                         "#,
                         item.script,
@@ -154,6 +222,16 @@ pub struct TxInput {
     pub sequence: u32,
 }
 
+impl Display for TxInput {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, r#"{{"prev_output": {{"hash": "{}", "idx": {}}}, "signature_script": "{}", "sequence": {}}}"#,
+               reverse_hash(&self.prev_output.hash),
+               self.prev_output.idx,
+               self.signature_script,
+               self.sequence)
+    }
+}
+
 impl TxInput {
     fn to_json(&self, indent_level: usize) -> Result<Vec<u8>, Box<dyn Error>> {
         let mut result = Vec::new();
@@ -161,10 +239,10 @@ impl TxInput {
                 {i}{{
                   {i}"prev_output": {{
                     {i}"hash": "{}",
-                    {i}"idx": {},
+                    {i}"idx": {}
                   {i}}},
                   {i}"signature_script": "{}",
-                  {i}"sequence": {},
+                  {i}"sequence": {}
                 {i}}},
                 "#,
                 reverse_hash(&self.prev_output.hash),
@@ -190,13 +268,21 @@ pub struct TxOutput {
     pub pub_key_script: String,
 }
 
+impl Display for TxOutput {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, r#"{{"value": {}, "pub_key_script": "{}"}}"#,
+               self.value,
+               self.pub_key_script,)
+    }
+}
+
 impl TxOutput {
     fn to_json(&self, indent_level: usize) -> Result<Vec<u8>, Box<dyn Error>> {
         let mut result = Vec::new();
         writedoc!(result, r#"
                 {i}{{
                   {i}"value": {},
-                  {i}"pub_key_script": "{}",
+                  {i}"pub_key_script": "{}"
                 {i}}},
                 "#,
                 self.value,
@@ -225,7 +311,7 @@ struct HashVisitor;
 impl<'de> Visitor<'de> for HashVisitor {
     type Value = String;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
         formatter.write_str("a bitcoin hash")
     }
 

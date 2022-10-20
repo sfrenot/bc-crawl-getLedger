@@ -160,8 +160,10 @@ pub fn store_block(block_channel: Receiver<Block>) {
         // gz.write_fmt(format_args!("{}", serde_json::ser::to_string_pretty(&block).unwrap())).unwrap();
         //gz.write_all(&serde_json::ser::to_vec_pretty(&block).unwrap()).unwrap();
         //gz.write_fmt(format_args!("{}", &block)).unwrap();
-        gz.write_all(&block.to_json(0).unwrap()).unwrap();
+        //gz.write_all(&block.to_json(0).unwrap()).unwrap();
         // println!("\n{}", String::from_utf8(block.to_json(0).unwrap()).unwrap());
+        write!(gz, "{}", &block).unwrap();
+        // println!("{}", &block);
         gz.finish().unwrap();
 
         let mut out = HEADERS_FROM_DOWNLOADED_BLOCKS.lock().unwrap();
