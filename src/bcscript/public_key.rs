@@ -1,15 +1,14 @@
 pub struct PublicKey {
-    bytes: Vec<u8>
+    bytes: Vec<u8>,
 }
 
 impl From<Vec<u8>> for PublicKey {
     fn from(bytes: Vec<u8>) -> Self {
-        let len;
-        if bytes.is_empty() {
-            len = 0;
+        let len = if bytes.is_empty() {
+            0
         } else {
-            len = get_len(bytes[0]);
-        }
+            get_len(bytes[0])
+        };
 
         if len != 0 && len == bytes.len() {
             PublicKey { bytes }

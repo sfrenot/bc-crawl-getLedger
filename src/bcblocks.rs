@@ -1,18 +1,20 @@
-use std::sync::Mutex;
-use lazy_static::lazy_static;
-use hex::FromHex;
-use crate::bcnet::bcmessage::{VERSION, VERSION_END};
 use std::collections::HashMap;
+use std::sync::Mutex;
+
+use hex::FromHex;
+use lazy_static::lazy_static;
+
+use crate::bcnet::bcmessage::{VERSION, VERSION_END};
 
 #[derive(Debug, Clone)]
 pub struct BlockDesc {
     pub idx: usize,
-    pub previous: String
+    pub previous: String,
 }
 
 pub struct BlocksMutex {
     pub blocks_id: Vec<(String, bool, bool, bool)>,
-    pub known_blocks: HashMap<String, BlockDesc>
+    pub known_blocks: HashMap<String, BlockDesc>,
 }
 
 lazy_static! {
@@ -48,8 +50,7 @@ pub fn get_getdata_message_payload(search_block: &str) -> Vec<u8> {
 }
 */
 
-pub fn create_getdata_message_payload() -> Vec<u8>{
-
+pub fn create_getdata_message_payload() -> Vec<u8> {
     let mut block_message = Vec::with_capacity(37);
     block_message.extend([0x01]); // Number of Inventory vectors
     block_message.extend([0x02, 0x00, 0x00, 0x40]); // Type of inventory entry (2 = block) (40 for witness)
@@ -75,7 +76,7 @@ pub fn create_getdata_message_payload() -> Vec<u8>{
 pub fn create_block_message_payload() {
     let blocks_id = &BLOCKS_MUTEX.lock().unwrap().blocks_id;
     let mut block_message = TEMPLATE_GETBLOCK_PAYLOAD.lock().unwrap();
-    *block_message = Vec::with_capacity(block_message.len()+32);
+    *block_message = Vec::with_capacity(block_message.len() + 32);
     block_message.extend(VERSION.to_le_bytes());
     block_message.push(1);
 
@@ -98,7 +99,7 @@ pub fn create_block_message_payload() {
 pub fn is_new(block: &str, previous: &str) -> Result<usize, ()> {
     let mut blocks_mutex_guard = BLOCKS_MUTEX.lock().unwrap();
 
-    let search_block =  blocks_mutex_guard.known_blocks.get(block).cloned();
+    let search_block = blocks_mutex_guard.known_blocks.get(block).cloned();
     let search_previous = blocks_mutex_guard.known_blocks.get(previous).cloned();
 
     match search_previous {
@@ -106,11 +107,11 @@ pub fn is_new(block: &str, previous: &str) -> Result<usize, ()> {
             match search_block {
                 None => {
                     let (val, _, downloaded, _) = blocks_mutex_guard.blocks_id.get(previous_block.idx).unwrap();
-                    blocks_mutex_guard.blocks_id[previous_block.idx] =  (val.to_string(), true, *downloaded, false);
-                    blocks_mutex_guard.blocks_id.insert((previous_block.idx+1) as usize, (block.to_string(), false, false, false));
+                    blocks_mutex_guard.blocks_id[previous_block.idx] = (val.to_string(), true, *downloaded, false);
+                    blocks_mutex_guard.blocks_id.insert((previous_block.idx + 1) as usize, (block.to_string(), false, false, false));
 
                     let idx = previous_block.idx + 1;
-                    blocks_mutex_guard.known_blocks.insert(block.to_string(), BlockDesc{idx, previous: previous.to_string()});
+                    blocks_mutex_guard.known_blocks.insert(block.to_string(), BlockDesc { idx, previous: previous.to_string() });
                     // eprintln!("Trouvé previous, Pas trouvé block");
                     // eprintln!("{:?}", blocks_id);
                     // eprintln!("{:?}", known_block);
@@ -127,7 +128,7 @@ pub fn is_new(block: &str, previous: &str) -> Result<usize, ()> {
                 Some(found_block) => {
                     // eprintln!("Previous {} non trouvé, Block trouvé {}", &previous, &block);
                     let idx = found_block.idx;
-                    let val = BlockDesc{idx, previous: previous.to_string()};
+                    let val = BlockDesc { idx, previous: previous.to_string() };
                     blocks_mutex_guard.known_blocks.insert(block.to_string(), val);
                     blocks_mutex_guard.blocks_id.insert(idx, (previous.to_string(), true, false, false));
                     eprintln!("Previous non {}, Block oui {}", &previous, &block);

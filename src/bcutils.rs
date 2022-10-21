@@ -16,7 +16,7 @@ pub fn get_compact_int(payload: &[u8]) -> (u64, usize) {
     if storage_length == UNIT_64 {
         return (u64::from_le_bytes((&payload[1..9]).try_into().unwrap()) as u64, 9);
     }
-    return (storage_length as u64, 1);
+    (storage_length as u64, 1)
 }
 
 pub fn to_compact_int(n: u64) -> Vec<u8> {

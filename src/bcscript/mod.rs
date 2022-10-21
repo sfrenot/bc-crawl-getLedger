@@ -11,8 +11,8 @@ pub(crate) fn main() {
     let hex_script = sig_script.to_owned() + pk_script;
     //let hex_script = "515560606b6c05abcdefabcd";
     let bin_script = hex::decode(hex_script).unwrap();
-    let script = parse::parse_script(&bin_script).unwrap();
-    println!("{:?}", &script);
+    let _script = parse::parse_script(&bin_script).unwrap();
+    //println!("{:?}", &script);
 
-    let _ = interpret::interpret(&bin_script, true).unwrap();
+    let _ = interpret::interpret(&bin_script, false).unwrap();
 }

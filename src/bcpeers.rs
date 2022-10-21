@@ -1,10 +1,11 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::Sender;
+use std::sync::Mutex;
+
+use lazy_static::lazy_static;
 
 use crate::bcfile as bcfile;
-use lazy_static::lazy_static;
 
 lazy_static! {
     static ref ADRESSES_VISITED: Mutex<HashMap<String, PeerStatus>> = Mutex::new(HashMap::new());
@@ -18,11 +19,11 @@ pub enum Status {
     Connecting,
     Connected,
     Done,
-    Failed
+    Failed,
 }
 
 #[derive(Debug)]
-struct PeerStatus  {
+struct PeerStatus {
     pub status: Status,
     pub _retries: i32,
 }
@@ -31,8 +32,8 @@ fn is_waiting(a_peer: String) -> bool {
     let mut address_visited = ADRESSES_VISITED.lock().unwrap();
     // println!("Before {:?}", address_visited);
     let mut is_waiting = false;
-    if !address_visited.contains_key(&a_peer) {
-        address_visited.insert(a_peer, PeerStatus{status:Status::Connecting, _retries:0});
+    if let std::collections::hash_map::Entry::Vacant(e) = address_visited.entry(a_peer) {
+        e.insert(PeerStatus { status: Status::Connecting, _retries: 0 });
         is_waiting = true
     }
     // } else {
@@ -48,26 +49,26 @@ fn is_waiting(a_peer: String) -> bool {
     is_waiting
 }
 
-pub fn fail(a_peer :String){
+pub fn fail(a_peer: String) {
     let mut address_status = ADRESSES_VISITED.lock().unwrap();
-    address_status.insert(a_peer, PeerStatus{status:Status::Failed, _retries:0});
+    address_status.insert(a_peer, PeerStatus { status: Status::Failed, _retries: 0 });
 }
 
-pub fn done(a_peer :String) {
+pub fn done(a_peer: String) {
     let mut address_status = ADRESSES_VISITED.lock().unwrap();
-    address_status.insert(a_peer, PeerStatus{status:Status::Done, _retries:0});
+    address_status.insert(a_peer, PeerStatus { status: Status::Done, _retries: 0 });
 }
 
 pub fn get_peers_status() -> (usize, usize, usize, usize) {
     let mut done = 0;
     let mut fail = 0;
     let mut other = 0;
-    let address_status  = ADRESSES_VISITED.lock().unwrap();
-    for (_, peer_status) in address_status.iter(){
+    let address_status = ADRESSES_VISITED.lock().unwrap();
+    for (_, peer_status) in address_status.iter() {
         match peer_status.status {
             Status::Done => done += 1,
             Status::Failed => fail += 1,
-            _ => other +=1,
+            _ => other += 1,
         }
     }
     (address_status.len(), other, done, fail)
@@ -86,16 +87,15 @@ pub fn get_peers_status() -> (usize, usize, usize, usize) {
 //     return true;
 // }
 
-pub fn register_peer_connection(a_peer: &String) {
+pub fn register_peer_connection(a_peer: &str) {
     let mut address_status = ADRESSES_VISITED.lock().unwrap();
-    address_status.insert(a_peer.to_string(), PeerStatus{status:Status::Connected, _retries:0});
+    address_status.insert(a_peer.to_string(), PeerStatus { status: Status::Connected, _retries: 0 });
 }
 
 pub fn check_addr_messages(new_addresses: Vec<String>, address_channel: &Sender<String>) -> usize {
     for new_peer in &new_addresses {
         if is_waiting(new_peer.to_string()) {
-
-            let mut msg:String  = String::new();
+            let mut msg: String = String::new();
             msg.push_str(format!("PAR address: {:?}\n", new_peer).as_str());
             // msg.push_str(format!("PAR address: {:?}, ", ip_v4).as_str());
             // msg.push_str(format!("port = {:?}\n", port).as_str());

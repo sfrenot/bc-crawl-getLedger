@@ -1,39 +1,40 @@
-pub mod bcmessage;
-
-use std::sync::Mutex;
-use lazy_static::lazy_static;
-use std::time::Duration;
-use std::sync::mpsc::Sender;
-use std::sync::atomic::Ordering;
-use std::io::Write;
+use std::collections::HashMap;
 use std::io::Error;
 use std::io::ErrorKind;
-use pad::{PadStr, Alignment};
-use crate::bcparse::Block;
-
+use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
+use std::sync::atomic::Ordering;
+use std::sync::mpsc::Sender;
+use std::sync::Mutex;
+use std::time::Duration;
+
 use chan::Receiver;
+use lazy_static::lazy_static;
+use pad::{Alignment, PadStr};
 
 // use crate::bcmessage::{ReadResult, INV, MSG_VERSION, MSG_VERSION_ACK, MSG_GETADDR, CONN_CLOSE, MSG_ADDR, HEADERS, GET_BLOCKS, BLOCK, GET_DATA};
-use bcmessage::{MSG_VERSION, MSG_VERSION_ACK, MSG_GETADDR, CONN_CLOSE, MSG_ADDR, GET_HEADERS, HEADERS, BLOCK, GET_DATA};
-use crate::bcfile as bcfile;
-use crate::bcblocks as bcblocks;
-use crate::bcpeers as bcpeers;
-use std::collections::HashMap;
+use bcmessage::{BLOCK, CONN_CLOSE, GET_DATA, GET_HEADERS, HEADERS, MSG_ADDR, MSG_GETADDR, MSG_VERSION, MSG_VERSION_ACK};
 
-const CONNECTION_TIMEOUT:Duration = Duration::from_secs(10);
+use crate::bcblocks as bcblocks;
+use crate::bcfile as bcfile;
+use crate::bcparse::Block;
+use crate::bcpeers as bcpeers;
+
+pub mod bcmessage;
+
+const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 // const READ_MESSAGE_TIMEOUT:Duration = Duration::from_secs(2);
 const MIN_ADDRESSES_RECEIVED_THRESHOLD: usize = 5;
-const NB_MAX_READ_ON_SOCKET:usize = 20;
+const NB_MAX_READ_ON_SOCKET: usize = 20;
 
 // Debugger
-static mut NODES_STATUS:[([u8; 15], u64, u64, u64, u64, u64); crate::THREADS as usize]= [([0; 15], 0, 0, 0, 0, 0); crate::THREADS as usize];
+static mut NODES_STATUS: [([u8; 15], u64, u64, u64, u64, u64); crate::THREADS as usize] = [([0; 15], 0, 0, 0, 0, 0); crate::THREADS as usize];
 lazy_static! {
     pub static ref NB_NOEUDS_CONNECTES:Mutex<HashMap<u8, usize>> = Mutex::new(HashMap::new());
 }
 
-pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, block_sender: Sender<Block>, num: u8){
-    loop{ //Node Management
+pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, block_sender: Sender<Block>, num: u8) {
+    loop { //Node Management
         let target_address = connection_start_channel.recv().unwrap();
         let mut status: &String = &MSG_VERSION; // Start from this status
 
@@ -44,23 +45,23 @@ pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_chann
             Ok(connection) => {
                 // connection.set_read_timeout(Some(READ_MESSAGE_TIMEOUT)).unwrap();
                 loop {
-                   // eprintln!("Avant Activation {}, {}", target_address.clone(), status);
-                   status = match activate_peer(&num, &connection, &status, &address_channel_tx, &block_sender, &target_address) {
-                       Err(e) => {
-                           match e.kind() {
-                               ErrorKind::Other => {
-                                   // eprintln!("Fin du noeud: {}: {}", e, target_address);
-                                   bcpeers::done(target_address.clone());
-                               },
-                               _ => {
-                                   // eprintln!("Error sending request: {}: {}", e, target_address);
-                                   bcpeers::fail(target_address.clone());
-                               }
-                           }
-                           break;
-                       },
-                       Ok(new_status) =>{ &new_status }
-                   }
+                    // eprintln!("Avant Activation {}, {}", target_address.clone(), status);
+                    status = match activate_peer(&num, &connection, status, &address_channel_tx, &block_sender, &target_address) {
+                        Err(e) => {
+                            match e.kind() {
+                                ErrorKind::Other => {
+                                    // eprintln!("Fin du noeud: {}: {}", e, target_address);
+                                    bcpeers::done(target_address.clone());
+                                }
+                                _ => {
+                                    // eprintln!("Error sending request: {}: {}", e, target_address);
+                                    bcpeers::fail(target_address.clone());
+                                }
+                            }
+                            break;
+                        }
+                        Ok(new_status) => { new_status }
+                    }
                 } // loop for node
             }
         };
@@ -70,32 +71,32 @@ pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_chann
     }
 }
 
-fn handle_incoming_message<'a>(_num: &u8, connection:& TcpStream, sender: &Sender<String>, block_sender: &Sender<Block>, target_address: &String) -> &'a String  {
-    let mut lecture:usize = 0; // Garde pour éviter connection infinie inutile
+fn handle_incoming_message<'a>(_num: &u8, connection: &TcpStream, sender: &Sender<String>, block_sender: &Sender<Block>, target_address: &str) -> &'a String {
+    let mut lecture: usize = 0; // Garde pour éviter connection infinie inutile
     loop {
 
         // println!("Lecture de {} thread {}", target_address, num);
-        match bcmessage::read_message(&connection) {
+        match bcmessage::read_message(connection) {
             Err(_error) => return &CONN_CLOSE,
             Ok((command, payload)) => {
                 //eprintln!("Command From : {} --> {}, payload : {}", &target_address, &command, payload.len());
                 // if payload.len() <= 0 { panic!("Payload nul");}
                 match command {
-                    cmd if cmd == *MSG_VERSION  => {
-                        handle_incoming_cmd_version(&target_address, &payload);
+                    cmd if cmd == *MSG_VERSION => {
+                        handle_incoming_cmd_version(target_address, &payload);
                         return &MSG_VERSION;
-                    },
+                    }
                     cmd if cmd == *MSG_VERSION_ACK
-                        => return &MSG_VERSION_ACK,
-                    cmd if cmd == *MSG_ADDR && handle_incoming_cmd_msg_addr(&payload, &sender)
-                        => return &MSG_GETADDR,
+                    => return &MSG_VERSION_ACK,
+                    cmd if cmd == *MSG_ADDR && handle_incoming_cmd_msg_addr(&payload, sender)
+                    => return &MSG_GETADDR,
                     cmd if cmd == *HEADERS
-                        => return match handle_incoming_cmd_msg_header(&payload, &mut lecture) {
-                            true  => &GET_HEADERS,
-                            false => &CONN_CLOSE
-                        },
+                    => return match handle_incoming_cmd_msg_header(&payload, &mut lecture) {
+                        true => &GET_HEADERS,
+                        false => &CONN_CLOSE
+                    },
                     cmd if cmd == *BLOCK
-                        => return match handle_incoming_cmd_msg_block(&payload, &mut lecture, &block_sender) {
+                    => return match handle_incoming_cmd_msg_block(&payload, &mut lecture, block_sender) {
                         true => &GET_DATA,
                         false => &CONN_CLOSE
                     },
@@ -103,7 +104,7 @@ fn handle_incoming_message<'a>(_num: &u8, connection:& TcpStream, sender: &Sende
                 };
             }
         };
-        lecture+=1;
+        lecture += 1;
         if lecture > NB_MAX_READ_ON_SOCKET {
             eprintln!("Sortie du noeud : trop de lectures inutiles");
             return &CONN_CLOSE;
@@ -113,18 +114,18 @@ fn handle_incoming_message<'a>(_num: &u8, connection:& TcpStream, sender: &Sende
 }
 
 // TODO: -> has a hashmap
-fn next_status(from: &String) -> &String {
+fn next_status(from: &str) -> &String {
     match from {
-        elem if *elem == *MSG_VERSION => {&MSG_VERSION_ACK},
-        elem if *elem == *MSG_VERSION_ACK => {&MSG_GETADDR},
-        elem if *elem == *MSG_GETADDR => {&GET_HEADERS},
-        elem if *elem == *GET_HEADERS => {&GET_DATA},
-        elem if *elem == *GET_DATA => {&GET_DATA},
-        _ => {&CONN_CLOSE}
+        elem if *elem == *MSG_VERSION => { &MSG_VERSION_ACK }
+        elem if *elem == *MSG_VERSION_ACK => { &MSG_GETADDR }
+        elem if *elem == *MSG_GETADDR => { &GET_HEADERS }
+        elem if *elem == *GET_HEADERS => { &GET_DATA }
+        elem if *elem == *GET_DATA => { &GET_DATA }
+        _ => { &CONN_CLOSE }
     }
 }
 
-fn trace(num: &u8, target: &String, current: &String) {
+fn trace(num: &u8, target: &str, current: &str) {
     unsafe {
         let (mut node, run, mut ver, mut addr, mut head, mut data) = NODES_STATUS[*num as usize];
         match current {
@@ -138,7 +139,7 @@ fn trace(num: &u8, target: &String, current: &String) {
         node.copy_from_slice(&target.pad_to_width_with_alignment(20, Alignment::Right).as_bytes()[0..15]);
 
         // eprint!("{} -> ", &num);
-        NODES_STATUS[*num as usize] = (node, run+1, ver, addr, head, data);
+        NODES_STATUS[*num as usize] = (node, run + 1, ver, addr, head, data);
         for (_a, _b, _c, _d, _e, f) in NODES_STATUS {
             if f > 2 {
                 NB_NOEUDS_CONNECTES.lock().unwrap().insert(*num, 1);
@@ -148,11 +149,11 @@ fn trace(num: &u8, target: &String, current: &String) {
     }
 }
 
-fn activate_peer<'a>(num: &u8, mut connection: &TcpStream, current: &'a String, sender: &Sender<String>, block_sender: &Sender<Block>, target: &String) -> Result<&'a String, Error> {
+fn activate_peer<'a>(num: &u8, mut connection: &TcpStream, current: &'a str, sender: &Sender<String>, block_sender: &Sender<Block>, target: &str) -> Result<&'a String, Error> {
     // // Trace function
-    trace(&num, &target, &current);
+    trace(num, target, current);
 
-    connection.write(bcmessage::build_request(current).as_slice()).unwrap();
+    connection.write_all(bcmessage::build_request(current).as_slice()).unwrap();
 
     match handle_incoming_message(num, connection, sender, block_sender, target) {
         res if *res == *CONN_CLOSE => Err(Error::new(ErrorKind::Other, format!("Connexion terminée {} <> {}", current, res))),
@@ -163,16 +164,16 @@ fn activate_peer<'a>(num: &u8, mut connection: &TcpStream, current: &'a String, 
 }
 
 // Incoming messages
-fn handle_incoming_cmd_version(peer: &String, payload: &Vec<u8>) {
+fn handle_incoming_cmd_version(peer: &str, payload: &[u8]) {
     bcfile::store_version_message(peer, bcmessage::process_version_message(payload));
     bcpeers::register_peer_connection(peer);
 }
 
-fn handle_incoming_cmd_msg_addr(payload: &Vec<u8>, sender: &Sender<String>) -> bool {
-    bcpeers::check_addr_messages(bcmessage::process_addr_message(&payload), &sender) > MIN_ADDRESSES_RECEIVED_THRESHOLD
+fn handle_incoming_cmd_msg_addr(payload: &[u8], sender: &Sender<String>) -> bool {
+    bcpeers::check_addr_messages(bcmessage::process_addr_message(payload), sender) > MIN_ADDRESSES_RECEIVED_THRESHOLD
 }
 
-fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> bool {
+fn handle_incoming_cmd_msg_header(payload: &[u8], lecture: &mut usize) -> bool {
     // eprintln!("Status : {} -> {}", idx, block);
     match bcmessage::process_headers_message(payload) {
         Ok(blocks) => {
@@ -183,13 +184,13 @@ fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> boo
             // eprintln!("new payload");
             *lecture = 0;
             true
-        },
+        }
         Err(err) => {
             match err {
                 bcmessage::ProcessHeadersMessageError::UnkownBlocks => {
                     eprintln!("Sortie du noeud");
                     false
-                },
+                }
                 _ => {
                     // eprintln!("Erreur -> {:?}", err);
                     // std::process::exit(1);
@@ -200,24 +201,24 @@ fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> boo
     }
 }
 
-fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize, block_sender: &Sender<Block>) -> bool {
+fn handle_incoming_cmd_msg_block(payload: &[u8], lecture: &mut usize, block_sender: &Sender<Block>) -> bool {
     match bcmessage::process_block_message(payload) {
         Ok(block) => {
             block_sender.send(block).unwrap();
             *lecture = 0;
             // eprintln!("new block stored");
             true
-        },
+        }
         Err(e) => {
             match e {
                 bcmessage::ProcessBlockMessageError::UnkownBlock => {
                     eprintln!("Error processing block message: Unknown Block");
                     false
-                },
+                }
                 bcmessage::ProcessBlockMessageError::Parsing(..) => {
                     eprintln!("Error processing block message: Parsing Error");
                     false
-                },
+                }
                 bcmessage::ProcessBlockMessageError::BlockAlreadyDownloaded => {
                     true
                 }
