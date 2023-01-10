@@ -1,3 +1,11 @@
+use std::process;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
+use std::thread;
+use std::time::{Duration, SystemTime};
+
+use jemalloc_ctl::{epoch, stats};
+
 mod bcblocks;
 mod bcfile;
 mod bcnet;
@@ -11,15 +19,6 @@ use trust_dns_resolver::config::ResolverConfig;
 use trust_dns_resolver::config::ResolverOpts;
 
 use std::mem;
-use std::sync::mpsc;
-use std::sync::atomic::Ordering;
-
-use std::thread;
-use std::process;
-
-use jemalloc_ctl::{stats, epoch};
-
-use std::time::{Duration, SystemTime};
 
 use crate::bcparse::Block;
 const CHECK_TERMINATION_TIMEOUT: Duration = Duration::from_secs(5);
@@ -36,8 +35,7 @@ pub static mut LAST_VOL_HEADERS: usize = 0;
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 fn main() {
-
-    //bcscript::main();
+    bcscript::main();
 
     bcfile::open_logfile(LOG_FILE);
     bcfile::load_headers_at_startup();
@@ -59,18 +57,18 @@ fn main() {
     let (connecting_start_channel_sender, connecting_start_channel_receiver) = chan::sync(MESSAGE_CHANNEL_SIZE);
 
     eprintln!("Début initialisation {} threads", THREADS);
-    thread::spawn(move || { check_pool_size(SystemTime::now());});
-    thread::spawn(move || { bcfile::store_block(block_receiver);});
+    thread::spawn(move || { check_pool_size(SystemTime::now()); });
+    thread::spawn(move || { bcfile::store_block(block_receiver); });
 
     for i in 0..THREADS {
         let sender = address_channel_sender.clone();
         let block_sender = block_sender.clone();
         let recv = connecting_start_channel_receiver.clone();
-        thread::spawn(move || { bcnet::handle_one_peer(recv, sender, block_sender, i);});
+        thread::spawn(move || { bcnet::handle_one_peer(recv, sender, block_sender, i); });
     }
 
     let resolver = Resolver::new(ResolverConfig::default(), ResolverOpts::default()).unwrap();
-    let mut initial_addresses: Vec<String>= Vec::new();
+    let mut initial_addresses: Vec<String> = Vec::new();
     for node_addr in resolver.lookup_ip(DNS_START).unwrap() {
         initial_addresses.push(format!("{}:{}", node_addr, PORT_START));
     }
@@ -83,18 +81,18 @@ fn main() {
     }
 }
 
-fn check_pool_size(start_time: SystemTime){
+fn check_pool_size(start_time: SystemTime) {
     loop {
         epoch::advance().unwrap();
         let allocated = stats::allocated::read().unwrap();
         let resident = stats::resident::read().unwrap();
-        println!("{} MB bytes allocated/{} MB resident", allocated / (1024*1024), resident/ (1024*1024));
+        println!("{} MB bytes allocated/{} MB resident", allocated / (1024 * 1024), resident / (1024 * 1024));
 
         let now = SystemTime::now();
         thread::sleep(CHECK_TERMINATION_TIMEOUT);
         let (total, other, done, failed) = bcpeers::get_peers_status();
         let (headers, blocks) = bcfile::get_vols();
-        let duree = now.elapsed().unwrap().as_secs();
+        let elapsed = now.elapsed().unwrap().as_secs();
 
         // let memory = &bcblocks::BLOCKS_MUTEX.lock().unwrap().blocks_id;
         // let mut tot_downloaded = 0;
@@ -107,7 +105,7 @@ fn check_pool_size(start_time: SystemTime){
 
         unsafe {
             eprintln!("\nTotal: {} nodes\t -> TBD: {}, Done: {}, Fail: {}, Connectés/Data: {}/{}", total, other, done, failed, bcnet::NB_NOEUDS_CONNECTES.lock().unwrap().len(), THREADS);
-            eprintln!("{}s Volume / Speed\t\t -> Missing Headers : {}-{}/s,  Downloaded Blocks : {}-{}/s différence {}", duree, headers, (headers-LAST_VOL_HEADERS)/duree as usize, blocks, (blocks-LAST_VOL_BLOCKS_DIR)/duree as usize, blocks-LAST_VOL_BLOCKS_DIR as usize);
+            eprintln!("{}s Volume / Speed\t\t -> Missing Headers : {}-{}/s,  Downloaded Blocks : {}-{}/s différence {}", elapsed, headers, (headers - LAST_VOL_HEADERS) / elapsed as usize, blocks, (blocks - LAST_VOL_BLOCKS_DIR) / elapsed as usize, blocks - LAST_VOL_BLOCKS_DIR as usize);
             LAST_VOL_HEADERS = headers;
             LAST_VOL_BLOCKS_DIR = blocks;
         }

@@ -7,48 +7,48 @@ use tabled::{Alignment, MaxWidth, MinWidth, Modify, Style};
 use tabled::builder::Builder;
 use tabled::object::Rows;
 
-use super::script::{as_bool, as_script_nb};
 use super::opcodes::*;
 use super::parse::{parse_one_op, parse_script};
 use super::public_key::PublicKey;
+use super::script::{as_bool, as_script_nb};
 use super::script::*;
 
 pub struct Stack {
     pub main: Vec<Vec<u8>>,
-    pub alt: Vec<Vec<u8>>
+    pub alt: Vec<Vec<u8>>,
 }
 
 impl Stack {
     fn push(&mut self, bytes: Vec<u8>) -> Result<(), ScriptError> {
         if bytes.len() > MAX_SCRIPT_ELEMENT_SIZE {
-            return Err(ScriptError::PushSizeErr)
+            return Err(ScriptError::PushSize);
         }
         self.main.push(bytes);
 
         if self.main.len() + self.alt.len() >= MAX_STACK_SIZE {
-            return Err(ScriptError::StackOverflowErr)
+            return Err(ScriptError::StackOverflow);
         }
         Ok(())
     }
 
     fn push_alt(&mut self, bytes: Vec<u8>) -> Result<(), ScriptError> {
         if bytes.len() > MAX_SCRIPT_ELEMENT_SIZE {
-            return Err(ScriptError::PushSizeErr)
+            return Err(ScriptError::PushSize);
         }
         self.alt.push(bytes);
 
         if self.main.len() + self.alt.len() >= MAX_STACK_SIZE {
-            return Err(ScriptError::StackOverflowErr)
+            return Err(ScriptError::StackOverflow);
         }
         Ok(())
     }
 
     fn pop(&mut self) -> Result<Vec<u8>, ScriptError> {
-        Ok(self.main.pop().ok_or(ScriptError::InvalidStackOperationErr)?)
+        self.main.pop().ok_or(ScriptError::InvalidStackOperation)
     }
 
     fn pop_alt(&mut self) -> Result<Vec<u8>, ScriptError> {
-        Ok(self.alt.pop().ok_or(ScriptError::InvalidAltStackOperationErr)?)
+        self.alt.pop().ok_or(ScriptError::InvalidAltStackOperation)
     }
 
     // Usage: stack.top(0) to get last element or stack.top(-1) to get 2nd element from the end
@@ -58,9 +58,9 @@ impl Stack {
         }
         let idx = self.main.len() as i64 - 1 + pos;
         if idx < 0 {
-            return Err(ScriptError::InvalidStackOperationErr)
+            return Err(ScriptError::InvalidStackOperation);
         }
-        Ok(self.main.get(idx as usize).ok_or(ScriptError::InvalidStackOperationErr)?.to_vec())
+        Ok(self.main.get(idx as usize).ok_or(ScriptError::InvalidStackOperation)?.to_vec())
     }
 
     fn rm_top(&mut self, pos: i64) -> Result<Vec<u8>, ScriptError> {
@@ -69,7 +69,7 @@ impl Stack {
         }
         let idx = self.main.len() as i64 - 1 + pos;
         if idx < 0 {
-            return Err(ScriptError::InvalidStackOperationErr)
+            return Err(ScriptError::InvalidStackOperation);
         }
         Ok(self.main.remove(idx as usize))
     }
@@ -81,13 +81,14 @@ impl Stack {
         let idx_a = self.main.len() as i64 - 1 + a;
         let idx_b = self.main.len() as i64 - 1 + b;
         if idx_a < 0 || idx_b < 0 {
-            return Err(ScriptError::InvalidStackOperationErr)
+            return Err(ScriptError::InvalidStackOperation);
         }
-        Ok(self.main.swap(idx_a as usize, idx_b as usize))
+        self.main.swap(idx_a as usize, idx_b as usize);
+        Ok(())
     }
 }
 
-fn print_stack(stack: &Vec<Vec<u8>>, title: &str, min_width: usize, max_width: usize) {
+fn print_stack(stack: &[Vec<u8>], title: &str, min_width: usize, max_width: usize) {
     let mut hex_stack = {
         let mut vec = Vec::new();
         for elem in stack {
@@ -180,18 +181,18 @@ fn print_state(stack: &Stack, script: &Script, step_nb: usize) {
     }
 }
 
-fn check_sig(mut sig: Vec<u8>, pub_key_bytes: Vec<u8>, script_code: Vec<u8>) -> bool {
+fn check_sig(mut sig: Vec<u8>, pub_key_bytes: Vec<u8>, _script_code: Vec<u8>) -> bool {
     // we check if pub key is valid
     let pub_key = PublicKey::from(pub_key_bytes);
     if !pub_key.is_valid() {
-        return false
+        return false;
     }
 
     // we get hash type of signature
     if sig.is_empty() {
-        return false
+        return false;
     }
-    let hash_type = sig.last().copied().unwrap();
+    let _hash_type = sig.last().copied().unwrap();
     sig.pop();
     true
 }
@@ -200,7 +201,7 @@ pub fn interpret(script: &[u8], verbose: bool) -> Result<(), ScriptError> {
     const SCRIPT_FALSE: [u8; 0] = [];
     const SCRIPT_TRUE: [u8; 1] = [0x01];
 
-    let mut stack = Stack {main: Vec::with_capacity(20), alt: Vec::with_capacity(20)};
+    let mut stack = Stack { main: Vec::with_capacity(20), alt: Vec::with_capacity(20) };
     let mut condition_stack: Vec<bool> = Vec::with_capacity(10);
     let mut execute: bool;
     let mut op_count: usize = 0;
@@ -208,13 +209,13 @@ pub fn interpret(script: &[u8], verbose: bool) -> Result<(), ScriptError> {
     let mut code_hash_start: usize = 0;
 
     if script.len() > MAX_SCRIPT_SIZE {
-        return Err(ScriptError::ScriptSizeErr)
+        return Err(ScriptError::ScriptSize);
     }
 
     let mut display_script: Script = Script::new();
     let mut step_nb: usize = 0;
     if verbose {
-        display_script = parse_script(&script)?;
+        display_script = parse_script(script)?;
         print_state(&stack, &display_script, step_nb);
     }
 
@@ -224,22 +225,22 @@ pub fn interpret(script: &[u8], verbose: bool) -> Result<(), ScriptError> {
         match item {
             ScriptItem::ByteArray(b) => {
                 if b.len() > MAX_SCRIPT_ELEMENT_SIZE {
-                    return Err(ScriptError::PushSizeErr)
+                    return Err(ScriptError::PushSize);
                 }
                 if execute {
                     stack.push(b)?
                 }
-            },
+            }
             ScriptItem::Opcode(op) => {
                 if DISABLED_OPCODES.contains(&op) {
-                    return Err(ScriptError::DisabledOpcodeErr)
+                    return Err(ScriptError::DisabledOpcode);
                 }
 
                 if op.code > OP_16.code {
                     op_count += 1;
                 }
                 if op_count > MAX_OPS_PER_SCRIPT {
-                    return Err(ScriptError::OpCountErr)
+                    return Err(ScriptError::OpCount);
                 }
 
                 if execute || (OP_IF.code <= op.code && op.code <= OP_ENDIF.code) {
@@ -271,24 +272,24 @@ pub fn interpret(script: &[u8], verbose: bool) -> Result<(), ScriptError> {
                         }
                         OP_ELSE => {
                             if condition_stack.is_empty() {
-                                return Err(ScriptError::UnbalancedConditionalErr)
+                                return Err(ScriptError::UnbalancedConditional);
                             }
                             let last = condition_stack.last_mut().unwrap();
                             *last = !*last;
                         }
                         OP_ENDIF => {
                             if condition_stack.is_empty() {
-                                return Err(ScriptError::UnbalancedConditionalErr)
+                                return Err(ScriptError::UnbalancedConditional);
                             }
                             condition_stack.pop();
                         }
                         OP_VERIFY => {
                             let v = as_bool(&stack.pop()?);
                             if !v {
-                                return Err(ScriptError::VerifyErr)
+                                return Err(ScriptError::Verify);
                             }
                         }
-                        OP_RETURN => return Err(ScriptError::OpReturnErr),
+                        OP_RETURN => return Err(ScriptError::OpReturn),
 
                         //
                         // Stack
@@ -403,7 +404,7 @@ pub fn interpret(script: &[u8], verbose: bool) -> Result<(), ScriptError> {
                                 if v1 == v2 {
                                     stack.pop()?;
                                 } else {
-                                    return Err(ScriptError::EqualVerifyErr)
+                                    return Err(ScriptError::EqualVerify);
                                 }
                             }
                         }
@@ -450,7 +451,7 @@ pub fn interpret(script: &[u8], verbose: bool) -> Result<(), ScriptError> {
                                 if v1 == v2 {
                                     stack.pop()?;
                                 } else {
-                                    return Err(ScriptError::NumEqualVerifyErr)
+                                    return Err(ScriptError::NumEqualVerify);
                                 }
                             }
                         }
@@ -491,14 +492,10 @@ pub fn interpret(script: &[u8], verbose: bool) -> Result<(), ScriptError> {
                             find_and_delete(&mut script_code, &to_delete)?;
 
                             check_sig(signature, pub_key_bytes, script_code);
-
                         }
-                        OP_CHECKMULTISIG | OP_CHECKMULTISIGVERIFY => {
+                        OP_CHECKMULTISIG | OP_CHECKMULTISIGVERIFY => {}
 
-                        }
-
-
-                        _ => return Err(ScriptError::BadOpcodeErr)
+                        _ => return Err(ScriptError::BadOpcode)
                     }
                 }
             }
@@ -512,7 +509,7 @@ pub fn interpret(script: &[u8], verbose: bool) -> Result<(), ScriptError> {
     }
 
     if !condition_stack.is_empty() {
-        return Err(ScriptError::UnbalancedConditionalErr)
+        return Err(ScriptError::UnbalancedConditional);
     }
 
     Ok(())

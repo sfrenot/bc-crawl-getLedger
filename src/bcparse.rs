@@ -2,11 +2,12 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
+
 use bitcoin_hashes::{Hash, sha256d};
 use byteorder::{LittleEndian, ReadBytesExt};
 use indoc::writedoc;
-use serde::de::{Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::Visitor;
 
 use crate::bcutils::{get_compact_int, reverse_hash};
 
@@ -34,7 +35,7 @@ impl Display for Block {
                reverse_hash(&self.merkle_root),
                self.timestamp,
                self.bits,
-               self.nonce,)?;
+               self.nonce)?;
 
         for i in 0..self.txns.len() {
             write!(f, "{}", self.txns[i])?;
@@ -272,7 +273,7 @@ impl Display for TxOutput {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, r#"{{"value": {}, "pub_key_script": "{}"}}"#,
                self.value,
-               self.pub_key_script,)
+               self.pub_key_script)
     }
 }
 
@@ -352,14 +353,14 @@ impl Payload<'_> {
         Ok(hex::encode(self.pl.get(self.off - length..self.off).ok_or(ParsingError)?))
     }
     fn get_compact_int(&mut self) -> Result<usize, ParsingError> {
-        let (txn_count, off) = get_compact_int(&self.pl.get(self.off..).ok_or(ParsingError)?);
+        let (txn_count, off) = get_compact_int(self.pl.get(self.off..).ok_or(ParsingError)?);
         self.off += off;
         Ok(txn_count as usize)
     }
 }
 
 fn block_hash(block: &Payload) -> Result<String, ParsingError> {
-    Ok(hex::encode(sha256d::Hash::hash(&block.pl.get(..80).ok_or(ParsingError)?)))
+    Ok(hex::encode(sha256d::Hash::hash(block.pl.get(..80).ok_or(ParsingError)?)))
 }
 
 fn tx_hash(tx: &Payload, from: usize) -> String {
@@ -375,7 +376,7 @@ fn segwit_hash(tx: &Payload, from: usize, txs_offset: usize) -> String {
 }
 
 fn is_segwit(tx: &Payload) -> Result<bool, ParsingError> {
-    Ok(tx.pl.get(tx.off + 4..tx.off + 6).ok_or(ParsingError)? == &[0x00, 0x01])
+    Ok(tx.pl.get(tx.off + 4..tx.off + 6).ok_or(ParsingError)? == [0x00, 0x01])
 }
 
 fn tx_loop(pl: &mut Payload, tx_count: usize) -> Result<Vec<Transaction>, ParsingError> {
