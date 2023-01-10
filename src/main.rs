@@ -10,6 +10,7 @@ use trust_dns_resolver::Resolver;
 use trust_dns_resolver::config::ResolverConfig;
 use trust_dns_resolver::config::ResolverOpts;
 
+use std::mem;
 use std::sync::mpsc;
 use std::sync::atomic::Ordering;
 
@@ -19,6 +20,8 @@ use std::process;
 use jemalloc_ctl::{stats, epoch};
 
 use std::time::{Duration, SystemTime};
+
+use crate::bcparse::Block;
 const CHECK_TERMINATION_TIMEOUT: Duration = Duration::from_secs(5);
 const THREADS: u8 = 5;
 const MESSAGE_CHANNEL_SIZE: usize = 100000;
@@ -48,8 +51,10 @@ fn main() {
     // eprintln!("{:?}", known_block);
     // eprintln!("{:?}", bcblocks::BLOCKS_ID.lock().unwrap());
 
-    let (address_channel_sender, address_channel_receiver) = mpsc::channel();
-    let (block_sender, block_receiver) = mpsc::channel();
+    let (address_channel_sender, address_channel_receiver): (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel();
+    // let (block_sender, block_receiver) = mpsc::channel();
+    let (block_sender, block_receiver) = mpsc::sync_channel(4*mem::size_of::<Block>());
+
 
     let (connecting_start_channel_sender, connecting_start_channel_receiver) = chan::sync(MESSAGE_CHANNEL_SIZE);
 

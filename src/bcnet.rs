@@ -1,6 +1,7 @@
 pub mod bcmessage;
 
 use std::sync::Mutex;
+use std::sync::mpsc::SyncSender;
 use lazy_static::lazy_static;
 use std::time::Duration;
 use std::sync::mpsc::Sender;
@@ -32,7 +33,7 @@ lazy_static! {
     pub static ref NB_NOEUDS_CONNECTES:Mutex<HashMap<u8, usize>> = Mutex::new(HashMap::new());
 }
 
-pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, block_sender: Sender<Block>, num: u8){
+pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, block_sender: SyncSender<Block>, num: u8){
     loop{ //Node Management
         let target_address = connection_start_channel.recv().unwrap();
         let mut status: &String = &MSG_VERSION; // Start from this status
@@ -70,7 +71,7 @@ pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_chann
     }
 }
 
-fn handle_incoming_message<'a>(_num: &u8, connection:& TcpStream, sender: &Sender<String>, block_sender: &Sender<Block>, target_address: &String) -> &'a String  {
+fn handle_incoming_message<'a>(_num: &u8, connection:& TcpStream, sender: &Sender<String>, block_sender: &SyncSender<Block>, target_address: &String) -> &'a String  {
     let mut lecture:usize = 0; // Garde pour éviter connection infinie inutile
     loop {
 
@@ -148,7 +149,7 @@ fn trace(num: &u8, target: &String, current: &String) {
     }
 }
 
-fn activate_peer<'a>(num: &u8, mut connection: &TcpStream, current: &'a String, sender: &Sender<String>, block_sender: &Sender<Block>, target: &String) -> Result<&'a String, Error> {
+fn activate_peer<'a>(num: &u8, mut connection: &TcpStream, current: &'a String, sender: &Sender<String>, block_sender: &SyncSender<Block>, target: &String) -> Result<&'a String, Error> {
     // // Trace function
     trace(&num, &target, &current);
 
@@ -200,7 +201,7 @@ fn handle_incoming_cmd_msg_header(payload: &Vec<u8>, lecture: &mut usize) -> boo
     }
 }
 
-fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize, block_sender: &Sender<Block>) -> bool {
+fn handle_incoming_cmd_msg_block(payload: &Vec<u8>, lecture: &mut usize, block_sender: &SyncSender<Block>) -> bool {
     match bcmessage::process_block_message(payload) {
         Ok(block) => {
             block_sender.send(block).unwrap();
