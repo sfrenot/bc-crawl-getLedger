@@ -22,7 +22,7 @@ use std::mem;
 
 use crate::bcparse::Block;
 const CHECK_TERMINATION_TIMEOUT: Duration = Duration::from_secs(5);
-const THREADS: u8 = 5;
+const THREADS: usize = 10;
 const MESSAGE_CHANNEL_SIZE: usize = 100000;
 const DNS_START: &str = "seed.btc.petertodd.org";
 const PORT_START: &str = "8333";
@@ -51,7 +51,7 @@ fn main() {
 
     let (address_channel_sender, address_channel_receiver): (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel();
     // let (block_sender, block_receiver) = mpsc::channel();
-    let (block_sender, block_receiver) = mpsc::sync_channel(4*mem::size_of::<Block>());
+    let (block_sender, block_receiver) = mpsc::sync_channel(THREADS*mem::size_of::<Block>());
 
 
     let (connecting_start_channel_sender, connecting_start_channel_receiver) = chan::sync(MESSAGE_CHANNEL_SIZE);

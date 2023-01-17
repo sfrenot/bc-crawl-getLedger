@@ -31,10 +31,10 @@ const NB_MAX_READ_ON_SOCKET: usize = 20;
 // Debugger
 static mut NODES_STATUS: [([u8; 15], u64, u64, u64, u64, u64); crate::THREADS as usize] = [([0; 15], 0, 0, 0, 0, 0); crate::THREADS as usize];
 lazy_static! {
-    pub static ref NB_NOEUDS_CONNECTES:Mutex<HashMap<u8, usize>> = Mutex::new(HashMap::new());
+    pub static ref NB_NOEUDS_CONNECTES:Mutex<HashMap<usize, usize>> = Mutex::new(HashMap::new());
 }
 
-pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, block_sender: SyncSender<Block>, num: u8) -> ! {
+pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_channel_tx: Sender<String>, block_sender: SyncSender<Block>, num: usize) -> ! {
     loop{ //Node Management
         let target_address = connection_start_channel.recv().unwrap();
         let mut status: &String = &MSG_VERSION; // Start from this status
@@ -72,7 +72,7 @@ pub fn handle_one_peer(connection_start_channel: Receiver<String>, address_chann
     }
 }
 
-fn handle_incoming_message<'a>(_num: &u8, connection:& TcpStream, sender: &Sender<String>, block_sender: &SyncSender<Block>, target_address: &String) -> &'a String  {
+fn handle_incoming_message<'a>(_num: &usize, connection:& TcpStream, sender: &Sender<String>, block_sender: &SyncSender<Block>, target_address: &String) -> &'a String  {
     let mut lecture:usize = 0; // Garde pour éviter connection infinie inutile
     loop {
 
@@ -126,7 +126,7 @@ fn next_status(from: &str) -> &String {
     }
 }
 
-fn trace(num: &u8, target: &str, current: &str) {
+fn trace(num: &usize, target: &str, current: &str) {
     unsafe {
         let (mut node, run, mut ver, mut addr, mut head, mut data) = NODES_STATUS[*num as usize];
         match current {
@@ -150,7 +150,7 @@ fn trace(num: &u8, target: &str, current: &str) {
     }
 }
 
-fn activate_peer<'a>(num: &u8, mut connection: &TcpStream, current: &'a String, sender: &Sender<String>, block_sender: &SyncSender<Block>, target: &String) -> Result<&'a String, Error> {
+fn activate_peer<'a>(num: &usize, mut connection: &TcpStream, current: &'a String, sender: &Sender<String>, block_sender: &SyncSender<Block>, target: &String) -> Result<&'a String, Error> {
     // // Trace function
     trace(num, target, current);
 
