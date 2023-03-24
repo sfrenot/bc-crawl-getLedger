@@ -6,12 +6,18 @@ use colored::Colorize;
 use tabled::{Alignment, MaxWidth, MinWidth, Modify, Style};
 use tabled::builder::Builder;
 use tabled::object::Rows;
+use crate::bcparse::Transaction;
 
 use super::opcodes::*;
 use super::parse::{parse_one_op, parse_script};
-use super::public_key::PublicKey;
 use super::script::{as_bool, as_script_nb};
 use super::script::*;
+
+#[allow(dead_code)] // SIGHASH_ALL is the default behavior so not directly used
+const SIGHASH_ALL: u8 = 1; // sign all inputs and outputs -> default
+const SIGHASH_NONE: u8 = 2; // sign all inputs and no outputs
+const SIGHASH_SINGLE: u8 = 3; // sign all inputs and one output corresponding to the input
+const SIGHASH_ANYONECANPAY: u8 = 0x80; // modifier to be used with other flags, sign only one input
 
 pub struct Stack {
     pub main: Vec<Vec<u8>>,
@@ -181,32 +187,78 @@ fn print_state(stack: &Stack, script: &Script, step_nb: usize) {
     }
 }
 
-fn check_sig(mut sig: Vec<u8>, pub_key_bytes: Vec<u8>, _script_code: Vec<u8>) -> bool {
-    // we check if pub key is valid
-    let pub_key = PublicKey::from(pub_key_bytes);
-    if !pub_key.is_valid() {
-        return false;
+fn compute_tx_hash(tx: &Transaction, input_idx: usize, subscript: &[u8], sig_type: u8) -> sha256d::Hash {
+    let mut ntx = tx.clone();
+
+    let anyone_can_pay = sig_type & SIGHASH_ANYONECANPAY != 0;
+    let hash_single = sig_type & 0x1f == SIGHASH_SINGLE;
+    let hash_none = sig_type & 0x1f == SIGHASH_NONE;
+
+    // we check if input idx is in range in normal and SIGHASH_SINGLE cases
+    if input_idx >= tx.inputs.len() || (hash_single && input_idx >= tx.outputs.len()) {
+        let mut result = vec![0, 32];
+        result[0] = 1;
+        // Here we mimick the Bitcoin Core behaviour and
+        // return the hash of 100...00 if we have an index error
+        return sha256d::Hash::from_slice(&result).unwrap()
     }
 
-    // we get hash type of signature
-    if sig.is_empty() {
-        return false;
+    if hash_none {
+        ntx.outputs.clear();
     }
-    let _hash_type = sig.last().copied().unwrap();
-    sig.pop();
-    true
+
+    if hash_single {
+        ntx.outputs.truncate(input_idx + 1);
+        for i in 0..ntx.outputs.len() - 1 {
+            ntx.outputs[i].value = -1;
+            ntx.outputs[i].pub_key_script.clear();
+        }
+    }
+
+    if anyone_can_pay {
+        ntx.inputs = ntx.inputs[input_idx..input_idx+1].to_vec();
+    }
+
+    // We set all the sig scripts to empty scripts except the
+    // one for the current input which is set to subscript
+    for i in 0..ntx.inputs.len() {
+        if i != input_idx {
+            ntx.inputs[i].signature_script.clear();
+
+            if hash_single || hash_none {
+                ntx.inputs[i].sequence = 0;
+            }
+        } else {
+            ntx.inputs[i].signature_script = hex::encode(subscript);
+        }
+    }
+
+    let mut bytes = ntx.to_bytes(false);
+    bytes.extend((sig_type as u32).to_le_bytes());
+    sha256d::Hash::hash(&bytes)
 }
 
-pub fn interpret(script: &[u8], verbose: bool) -> Result<(), ScriptError> {
-    const SCRIPT_FALSE: [u8; 0] = [];
-    const SCRIPT_TRUE: [u8; 1] = [0x01];
+fn check_sig(sig: &mut Vec<u8>, pub_key: &[u8], subscript: &[u8], tx: &Transaction, input_idx: usize) -> bool {
+    let sig_type = sig.last().copied().unwrap();
+    sig.pop();
 
+    let key = libsecp256k1::PublicKey::parse_slice(&pub_key, None).unwrap();
+    // TODO: from block version 3, signatures should be parsed with parse_der()
+    let sig = libsecp256k1::Signature::parse_der_lax(&sig).unwrap();
+
+    let tx_hash = compute_tx_hash(tx, input_idx, &subscript, sig_type);
+    let message = libsecp256k1::Message::parse_slice(&tx_hash).unwrap();
+
+    libsecp256k1::verify(&message, &sig, &key)
+}
+
+pub fn interpret(script: &[u8], tx: &Transaction, input_idx: usize, verbose: bool) -> Result<(), ScriptError> {
     let mut stack = Stack { main: Vec::with_capacity(20), alt: Vec::with_capacity(20) };
     let mut condition_stack: Vec<bool> = Vec::with_capacity(10);
     let mut execute: bool;
     let mut op_count: usize = 0;
     let mut pc: usize = 0;
-    let mut code_hash_start: usize = 0;
+    let mut subscript_start: usize = 0;
 
     if script.len() > MAX_SCRIPT_SIZE {
         return Err(ScriptError::ScriptSize);
@@ -394,11 +446,7 @@ pub fn interpret(script: &[u8], verbose: bool) -> Result<(), ScriptError> {
                         OP_EQUAL | OP_EQUALVERIFY => {
                             let v1 = stack.pop()?;
                             let v2 = stack.pop()?;
-                            if v1 == v2 {
-                                stack.push(Vec::from(SCRIPT_TRUE))?
-                            } else {
-                                stack.push(Vec::from(SCRIPT_FALSE))?
-                            }
+                            stack.push(to_script_bool(v1 == v2))?;
 
                             if op == OP_EQUALVERIFY {
                                 if v1 == v2 {
@@ -478,21 +526,30 @@ pub fn interpret(script: &[u8], verbose: bool) -> Result<(), ScriptError> {
                             };
                             stack.push(res)?
                         }
-                        OP_CODESEPARATOR => code_hash_start = pc,
+                        OP_CODESEPARATOR => subscript_start = pc,
                         OP_CHECKSIG | OP_CHECKSIGVERIFY => {
-                            // Critical part of script verification
-                            let pub_key_bytes = stack.pop()?;
-                            let signature = stack.pop()?;
+                            let pub_key = stack.pop()?;
+                            let mut signature = stack.pop()?;
 
                             // part of the script that will be included in the serialized transaction
-                            let mut script_code = script[code_hash_start..].to_vec();
+                            let mut subscript = script[subscript_start..].to_vec();
 
-                            // we remove the sig from the script_code if present
+                            // we remove the sig if present and separators from the script_code
                             let to_delete = ScriptItem::ByteArray(signature.clone());
-                            find_and_delete(&mut script_code, &to_delete)?;
+                            find_and_delete(&mut subscript, &[to_delete, ScriptItem::Opcode(OP_CODESEPARATOR)])?;
 
-                            check_sig(signature, pub_key_bytes, script_code);
+                            let valid = check_sig(&mut signature, &pub_key, &subscript, tx, input_idx);
+                            stack.push(to_script_bool(valid))?;
+
+                            if op == OP_CHECKSIGVERIFY {
+                                if valid {
+                                    stack.pop()?;
+                                } else {
+                                    return Err(ScriptError::CheckSigVerify)
+                                }
+                            }
                         }
+
                         OP_CHECKMULTISIG | OP_CHECKMULTISIGVERIFY => {}
 
                         _ => return Err(ScriptError::BadOpcode)
@@ -510,6 +567,14 @@ pub fn interpret(script: &[u8], verbose: bool) -> Result<(), ScriptError> {
 
     if !condition_stack.is_empty() {
         return Err(ScriptError::UnbalancedConditional);
+    }
+
+    if stack.main.is_empty() {
+        return Err(ScriptError::EmptyStack)
+    }
+
+    if !as_bool(&stack.top(0)?) {
+        return Err(ScriptError::EvalFalse)
     }
 
     Ok(())

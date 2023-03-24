@@ -25,6 +25,9 @@ pub enum ScriptError {
     Verify,
     OpReturn,
     OpCount,
+    CheckSigVerify,
+    EvalFalse,
+    EmptyStack,
 }
 
 pub type Script = Vec<ScriptItem>;
@@ -45,19 +48,38 @@ impl Debug for ScriptItem {
     }
 }
 
-pub fn find_and_delete(script: &mut Vec<u8>, to_delete: &ScriptItem) -> Result<usize, ScriptError> {
+pub fn find_and_delete(script: &mut Vec<u8>, to_delete: &[ScriptItem]) -> Result<usize, ScriptError> {
     let mut pc = 0;
     let mut old_pc = pc;
     let mut occurences_nb = 0;
 
     while let Some(item) = parse_one_op(script, &mut pc)? {
-        if item == *to_delete {
+        if to_delete.contains(&item) {
             script.drain(old_pc..pc);
             occurences_nb += 1;
         }
         old_pc = pc;
     }
     Ok(occurences_nb)
+}
+
+pub fn to_script_bool(val: bool) -> Vec<u8> {
+    match val {
+        true => vec![0x01],
+        false => vec![]
+    }
+}
+
+pub fn as_bool(bytes: &[u8]) -> bool {
+    for i in 0..bytes.len() {
+        if bytes[i] != 0 {
+            if i == bytes.len() - 1 && bytes[i] == 0x80 {
+                return false;
+            }
+            return true;
+        }
+    }
+    false
 }
 
 // Convert an int to the Script Number format used on the stack
@@ -107,16 +129,4 @@ pub fn as_script_nb(bytes: &[u8]) -> Result<i64, ScriptError> {
     }
 
     Ok(result)
-}
-
-pub fn as_bool(bytes: &[u8]) -> bool {
-    for i in 0..bytes.len() {
-        if bytes[i] != 0 {
-            if i == bytes.len() - 1 && bytes[i] == 0x80 {
-                return false;
-            }
-            return true;
-        }
-    }
-    false
 }

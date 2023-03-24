@@ -9,7 +9,7 @@ use indoc::writedoc;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Visitor;
 
-use crate::bcutils::{get_compact_int, reverse_hash};
+use crate::bcutils::{get_compact_int, reverse_hash, to_compact_int};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Block {
@@ -87,7 +87,7 @@ impl Block {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct Transaction {
     #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
     pub hash: String,
@@ -214,9 +214,64 @@ impl Transaction {
 
         Ok(result)
     }
+
+    pub fn to_bytes(&self, with_witnesses: bool) -> Vec<u8>{
+        let segwit = with_witnesses && self.is_segwit;
+        let mut result = Vec::new();
+
+        // version
+        result.extend(self.version.to_le_bytes());
+
+        // segwit flag
+        if segwit {
+            result.extend(&[0x00, 0x01])
+        }
+
+        // inputs
+        result.extend(to_compact_int(self.inputs.len() as u64));
+        for input in &self.inputs {
+            // outpoint
+            result.extend(hex::decode(&input.prev_output.hash).unwrap());
+            result.extend(input.prev_output.idx.to_le_bytes());
+
+            // signature script
+            result.extend(to_compact_int((input.signature_script.len() / 2) as u64));
+            result.extend(hex::decode(&input.signature_script).unwrap());
+
+            // sequence
+            result.extend(input.sequence.to_le_bytes());
+        }
+
+        // outputs
+        result.extend(to_compact_int(self.outputs.len() as u64));
+        for output in &self.outputs {
+            // value
+            result.extend(output.value.to_le_bytes());
+
+            // pubkey script
+            result.extend(to_compact_int((output.pub_key_script.len() / 2) as u64));
+            result.extend(hex::decode(&output.pub_key_script).unwrap());
+        }
+
+        // witnesses
+        if segwit {
+            for witness in &self.witnesses {
+                result.extend(to_compact_int(witness.len() as u64));
+                for item in witness {
+                    result.extend(to_compact_int((item.script.len() / 2) as u64));
+                    result.extend(hex::decode(&item.script).unwrap());
+                }
+            }
+        }
+
+        // locktime
+        result.extend(&self.lock_time.to_le_bytes());
+
+        result
+    }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct TxInput {
     pub prev_output: OutPoint,
     pub signature_script: String,
@@ -256,14 +311,14 @@ impl TxInput {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct OutPoint {
     #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
     pub hash: String,
     pub idx: u32,
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct TxOutput {
     pub value: i64,
     pub pub_key_script: String,
@@ -294,7 +349,7 @@ impl TxOutput {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct WitnessItem {
     pub script: String,
 }
